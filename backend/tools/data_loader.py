@@ -341,6 +341,136 @@ def _adapt_ibm(
     return tx_canonical, cust_df
 
 
+# ---------------------------------------------------------------------------
+# IBM AML — Stratified Sampler
+# ---------------------------------------------------------------------------
+
+def _stratified_sample_ibm(
+    trans_path: str = str(_IBM_TRANS_FILE),
+    accts_path: str = str(_IBM_ACCTS_FILE),
+    target_size: int = 200_000,
+    max_pos_customers: int = 500,
+    seed: int = 42,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Stratified sample of the IBM AML HI-Small dataset for real-data testing.
+
+    Unlike the plain IBM adapter (which can read nrows from the file in order),
+    this function deliberately over-represents laundering-positive customers to
+    produce a sample where the positive rate is meaningfully above the raw 0.1%
+    baseline — necessary for rule and ML detection to have signal to work with.
+
+    Strategy
+    --------
+    1. Read only 'Account' and 'Is Laundering' from the full CSV (fast, ~1 GB
+       but usecols limits memory).
+    2. Identify every unique sender account that appears in at least one
+       laundering-labelled row.  Sample up to max_pos_customers of them (using
+       the fixed seed so results are reproducible) — all of each selected
+       customer's transactions are included, never truncated.
+    3. Compute the remaining row budget after the positive customers fill their
+       share.  Randomly sample clean (never-positive) customers to fill it,
+       again including each selected customer's full history.
+    4. Concatenate, reassign sequential txn_ids, and pass through the exact
+       same canonical mapping already built in _adapt_ibm (reused, not
+       duplicated).
+
+    Parameters
+    ----------
+    trans_path      : path to HI-Small_Trans.csv
+    accts_path      : path to HI-Small_accounts.csv
+    target_size     : approximate total transaction count to aim for (default
+                      200,000).  Actual count may exceed this slightly because
+                      customer histories are kept whole — never truncated mid-slice.
+    max_pos_customers : hard cap on how many positive customers to include.
+                      The IBM dataset has 3,376; at ~150 txns each their
+                      collective history (508k rows) already exceeds any
+                      reasonable target_size, so this cap keeps the sample
+                      balanced.  Default 500 (~75k txns).
+    seed            : random seed for the clean-customer sampling step, so
+                      identical inputs produce identical outputs across runs.
+    """
+    rng = random.Random(seed)
+
+    # ------------------------------------------------------------------
+    # Step 1: scan for positive customers using only two columns (fast)
+    # ------------------------------------------------------------------
+    scan = pd.read_csv(trans_path, usecols=["Account", "Is Laundering"])
+    all_pos_accounts: set = set(
+        scan.loc[scan["Is Laundering"] == 1, "Account"].unique()
+    )
+    all_neg_accounts: set = set(scan["Account"].unique()) - all_pos_accounts
+    del scan  # free memory before loading the full CSV
+
+    # ------------------------------------------------------------------
+    # Step 2: sample positive customers (capped)
+    # ------------------------------------------------------------------
+    pos_accounts_list = sorted(all_pos_accounts)  # deterministic ordering
+    rng.shuffle(pos_accounts_list)
+    selected_pos = set(pos_accounts_list[:max_pos_customers])
+
+    # ------------------------------------------------------------------
+    # Step 3: load the full CSV and slice positive customer rows
+    # ------------------------------------------------------------------
+    raw_full = pd.read_csv(trans_path)
+    pos_rows = raw_full[raw_full["Account"].isin(selected_pos)].copy()
+
+    # ------------------------------------------------------------------
+    # Step 4: fill the remainder from clean customers (whole histories)
+    # ------------------------------------------------------------------
+    remaining_budget = target_size - len(pos_rows)
+
+    selected_neg: set = set()
+    if remaining_budget > 0:
+        neg_accounts_list = sorted(all_neg_accounts)
+        rng.shuffle(neg_accounts_list)
+        budget_left = remaining_budget
+        for acct in neg_accounts_list:
+            acct_rows = (raw_full["Account"] == acct).sum()
+            if budget_left <= 0:
+                break
+            selected_neg.add(acct)
+            budget_left -= acct_rows
+
+    neg_rows = raw_full[raw_full["Account"].isin(selected_neg)].copy()
+    sampled_raw = pd.concat([pos_rows, neg_rows], ignore_index=True)
+    del raw_full, pos_rows, neg_rows  # free memory
+
+    # ------------------------------------------------------------------
+    # Step 5: reassign sequential txn_ids and apply canonical mapping
+    # ------------------------------------------------------------------
+    sampled_raw["txn_id"] = [f"T-{i:06d}" for i in range(1, len(sampled_raw) + 1)]
+    sampled_raw["timestamp"] = pd.to_datetime(
+        sampled_raw["Timestamp"], format="%Y/%m/%d %H:%M"
+    )
+    sampled_raw["sender_id"] = "C-" + sampled_raw["Account"].astype(str)
+    sampled_raw["receiver_id"] = "C-" + sampled_raw["Account.1"].astype(str)
+    sampled_raw["amount"] = sampled_raw["Amount Received"].astype(float)
+    sampled_raw["currency"] = sampled_raw["Receiving Currency"].map(
+        lambda x: _CURRENCY_MAP.get(x, "UNK")
+    )
+    fmt_tuples = sampled_raw["Payment Format"].map(
+        lambda x: _FORMAT_MAP.get(x, (_DEFAULT_TXN_TYPE, _DEFAULT_CHANNEL))
+    )
+    sampled_raw["txn_type"] = fmt_tuples.map(lambda t: t[0])
+    sampled_raw["channel"] = fmt_tuples.map(lambda t: t[1])
+    sampled_raw["sender_country"] = "UNK"
+    sampled_raw["receiver_country"] = "UNK"
+    sampled_raw["is_cross_border"] = False
+    sampled_raw["label_is_laundering"] = sampled_raw["Is Laundering"].astype(bool)
+    sampled_raw["pattern_label"] = None
+
+    tx_canonical = sampled_raw[[
+        "txn_id", "timestamp", "sender_id", "receiver_id",
+        "amount", "currency", "txn_type", "channel",
+        "sender_country", "receiver_country", "is_cross_border",
+        "label_is_laundering", "pattern_label",
+    ]].copy()
+
+    cust_df = _build_customers_from_ibm(accts_path, tx_canonical)
+    return tx_canonical, cust_df
+
+
+
 def _build_customers_from_ibm(
     accts_path: str,
     tx_df: pd.DataFrame,
@@ -521,8 +651,21 @@ def _validate_canonical(tx_df: pd.DataFrame, cust_df: pd.DataFrame) -> list[str]
 @tool(
     name="load_data",
     params={
-        "source": "str — 'ibm' | 'synthetic'. Selects the dataset adapter.",
-        "nrows": "int | None — if set, load only this many transaction rows (for testing).",
+        "source": (
+            "str — 'ibm' | 'ibm_stratified' | 'synthetic'. "
+            "'ibm_stratified' loads a stratified sample of the IBM HI-Small dataset "
+            "with over-represented laundering-positive customers for real-data testing."
+        ),
+        "nrows": "int | None — if set, load only this many transaction rows (ibm source only, for testing).",
+        "target_size": (
+            "int — approximate total transaction count for ibm_stratified mode (default 200,000). "
+            "Actual count may exceed slightly to avoid truncating customer histories."
+        ),
+        "max_pos_customers": (
+            "int — max laundering-positive customers to include in ibm_stratified mode (default 500). "
+            "Each positive customer's FULL history is included, so this caps the positive-side row count."
+        ),
+        "seed": "int — random seed for clean-customer sampling in ibm_stratified mode (default 42).",
     },
     description=(
         "Load a dataset and convert it to the canonical transactions + customers schema "
@@ -534,15 +677,21 @@ def load_data(
     ctx: ToolContext,
     source: str = "synthetic",
     nrows: Optional[int] = None,
+    target_size: int = 200_000,
+    max_pos_customers: int = 500,
+    seed: int = 42,
     **kw,
 ) -> ToolResult:
     """Load and canonicalise a dataset.
 
     Parameters
     ----------
-    ctx    : ToolContext — executor-managed context; df and customers will be set.
-    source : 'ibm' or 'synthetic'
-    nrows  : optional row limit, for smoke-testing without loading 5M rows
+    ctx               : ToolContext — executor-managed context; df and customers will be set.
+    source            : 'ibm', 'ibm_stratified', or 'synthetic'
+    nrows             : optional row limit for 'ibm' source (smoke-testing, sequential rows)
+    target_size       : approximate transaction count for 'ibm_stratified' (default 200,000)
+    max_pos_customers : max positive customers for 'ibm_stratified' (default 500)
+    seed              : random seed for clean-customer sampling in 'ibm_stratified' (default 42)
     """
     try:
         if source == "ibm":
@@ -561,6 +710,28 @@ def load_data(
                 nrows=nrows,
             )
             source_label = "IBM AML HI-Small"
+
+        elif source == "ibm_stratified":
+            if not _IBM_TRANS_FILE.exists():
+                return ToolResult(
+                    ok=False,
+                    error=(
+                        f"IBM AML HI-Small dataset not found at {_IBM_TRANS_FILE}. "
+                        "Run: import kagglehub; kagglehub.dataset_download("
+                        "'ealtman2019/ibm-transactions-for-anti-money-laundering-aml')"
+                    ),
+                )
+            tx_df, cust_df = _stratified_sample_ibm(
+                trans_path=str(_IBM_TRANS_FILE),
+                accts_path=str(_IBM_ACCTS_FILE),
+                target_size=target_size,
+                max_pos_customers=max_pos_customers,
+                seed=seed,
+            )
+            source_label = (
+                f"IBM AML HI-Small (stratified: target={target_size:,}, "
+                f"max_pos_customers={max_pos_customers}, seed={seed})"
+            )
 
         elif source == "synthetic":
             if not _SYNTHETIC_FILE.exists():
