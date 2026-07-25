@@ -13,6 +13,7 @@ httpx==0.27.2
 # --- LLM client (Track A) ---
 google-generativeai==0.8.3
 openai==1.51.0
+groq==1.6.0
 
 # --- Data / ML (Track B) ---
 pandas==2.2.3

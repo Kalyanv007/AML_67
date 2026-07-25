@@ -6,7 +6,7 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-25, precision/recall/FP validation table computed and added to README.
+**Last updated:** 2026-07-26, Groq LLM provider added, wired, and live-verified as a third provider option.
 
 ---
 
@@ -114,10 +114,40 @@ Added `tests/test_false_positive_reduction_vs_naive_baseline` (`test_integration
 *headline claim* (≥5× fewer flags, ≥5× lower FPR, at least one true positive caught) without pinning exact
 percentages, which would be brittle to minor threshold retuning by Track B.
 
+### Groq provider added (this update)
+Teammate independently added Groq support on their own machine (Mac, separate session) and pasted a
+diagnostic report as reference. **The code (`config.py`, `client.py`, `registry.py`) was already present
+on this Windows machine when this update started** — user had already applied/synced those edits before
+asking me to act, confirmed via a read-only fact-gathering pass rather than assumed. What was actually
+missing here and fixed in this update:
+- `requirements.txt` had no `groq` line — added `groq==1.6.0` (matching what was confirmed installed).
+- `.env.example` didn't document `GROQ_API_KEY` or mention "groq" as a valid `LLM_PROVIDER` value — fixed.
+- `groq` package wasn't installed in this machine's `.venv` — installed and confirmed (`pip show groq`).
+- This machine's real `.env` had `GROQ_API_KEY` set but `LLM_PROVIDER` still said `gemini` — user asked me
+  to fix it; flipped to `groq`.
+- **Did not blindly trust the hardcoded model name** (`llama-3.3-70b-versatile`) — same lesson as the
+  Gemini episode. Called `client.models.list()` against the live key first; confirmed the model is valid
+  on this account before running anything else.
+
+**Live-verified** (same rigor as the Gemini verification): `complete_json()` direct call; `parse_intent()`
+end-to-end across 6 queries including the two previously-tricky slang ones (both correct via Groq);
+`narrator._explain()` on a HIGH-risk row (accurate, no invented numbers, slightly more literal/mechanical
+prose than Gemini's version — a quality note, not a defect); full HTTP API round-trip
+(`llm_available: true`, correct live classification and flag count). One Groq quirk observed: it
+sometimes returns `confidence: 0.0` even when the classification is correct, and `top_n` occasionally
+comes back as a query-irrelevant value (e.g. `1` for an entity query) — harmless today since nothing
+downstream hard-gates on exact confidence values beyond the `<0.4` "low confidence" decision-log note in
+`planner.py`, but worth knowing this provider's confidence scores aren't very calibrated.
+
+`pytest tests/ -v` → **186/186 passing, confirmed** with `LLM_PROVIDER=groq` active in `.env` (tests
+correctly stub `complete_json`, unaffected by the provider change).
+
 ### Immediate next action
-No Track A phase work remains in the original 7-phase plan, LLM path verified, FP-reduction table done.
-Only open item: rehearsing the full demo end-to-end 2-3 times before presenting (README's Setup/Usage
-sections are the closest thing to a script; no dedicated `DEMO_SCRIPT.md` from Track B seen yet).
+No Track A phase work remains in the original 7-phase plan. Three LLM providers now wired and each
+individually live-verified (Gemini, Groq; OpenAI has code but was never actually tested live — nobody
+has tried an OpenAI key on this project). Only open item: rehearsing the full demo end-to-end 2-3 times
+before presenting (README's Setup/Usage sections are the closest thing to a script; no dedicated
+`DEMO_SCRIPT.md` from Track B seen yet).
 
 ---
 
@@ -177,8 +207,8 @@ sections are the closest thing to a script; no dedicated `DEMO_SCRIPT.md` from T
 | `backend/tools/base.py` | Complete — Contract 2, unchanged since Phase 0 |
 | `backend/tools/_mocks.py` | Complete — unchanged since Phase 0. `C-04521` is the pre-wired "obviously flagged" customer (structuring, R1, risk 78/high/report) — used as the default fixture across all tests |
 | `backend/agent/registry.py` | Complete — fixed in Phase 6: `TOOLS.clear()` + `importlib.reload()` on every call so `load_tools()` is deterministic in its requested mode regardless of prior calls in-process |
-| `backend/config.py` | Complete — unchanged since Phase 0 |
-| `backend/llm/client.py` | Complete — `complete_json()`, Gemini/OpenAI behind `settings.llm_provider`, returns `None` on any failure. **Verified live against a real Gemini key**; model changed from hardcoded `gemini-2.0-flash` (zero free-tier quota on this account) to the `gemini-flash-latest` alias, discovered via `genai.list_models()` rather than guessing |
+| `backend/config.py` | Complete — added `groq_api_key: str = ""` field (originated on teammate's machine, already present here when this update started) |
+| `backend/llm/client.py` | Complete — `complete_json()` now supports **three** providers (Gemini/OpenAI/Groq) behind `settings.llm_provider`, returns `None` on any failure. Gemini and Groq both **live-verified** end-to-end (model names checked against each account's live `list_models()` before trusting them, not assumed) — Gemini uses `gemini-flash-latest`, Groq uses `llama-3.3-70b-versatile`. OpenAI's branch has code but has never actually been tested live by anyone on this project |
 | `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback, **both paths now live-verified**. Phase 7 fixes: entity regex accepts real alphanumeric IDs; relative dates anchor to the dataset's own max date. Live-LLM finding: the LLM correctly classifies messy/slang phrasing the regex fallback missed, but returns relative-date shorthand (`"-30d"`) instead of ISO dates for date filters — safely rejected by Pydantic validation and falls back to regex (which handles dates correctly), not a crash |
 | `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params match Track B's actual tool signatures (Phase 6). **Phase 7 fix**: `explain_flag` now loads data and scores the entity fresh (deviates from Contract 4's original "reuse cached run" text, which was never wired to anything — documented inline) |
 | `backend/agent/executor.py` | Complete — core loop, timing, error isolation, re-planning branches, `_resolve_entities()` (post-Phase-6). **Phase 7 fix**: `_summarise()` now has dedicated, accurate messages for `explain_flag` and `eda` (previously fell through to a detection-flavoured generic message that didn't fit either) |

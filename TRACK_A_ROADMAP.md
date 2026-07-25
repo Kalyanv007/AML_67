@@ -406,6 +406,26 @@ pinning exact percentages that would be brittle to future threshold tuning.
 
 ---
 
+## Standalone task — Groq as a third LLM provider ✅ DONE
+
+Teammate added Groq support (`config.py`, `client.py`, `registry.py`) on their own machine independently
+and shared a diagnostic report as reference; those code changes were already present on this machine when
+this task started (confirmed via a read-only fact-gathering pass, not assumed). What was actually done
+here: added `groq==1.6.0` to `requirements.txt` (was missing), documented `GROQ_API_KEY`/`groq` in
+`.env.example` (was missing), installed the SDK into this machine's `.venv`, fixed this machine's `.env`
+(`GROQ_API_KEY` was set but `LLM_PROVIDER` still said `gemini`), and — critically — **did not trust the
+hardcoded model name blindly**: called `client.models.list()` against the live key first (same lesson
+learned the hard way during the Gemini episode) and confirmed `llama-3.3-70b-versatile` is valid on this
+account before running anything else.
+
+Live-verified with the same rigor as Gemini: `complete_json()`, `parse_intent()` across 6 queries
+(including both previously-tricky slang queries — correct via Groq too), `narrator._explain()` on a
+HIGH-risk row, and the full HTTP API. One quirk: Groq's `confidence` field is poorly calibrated (returns
+`0.0` even on correct classifications) — harmless today, nothing hard-gates on it beyond a `<0.4` logging
+threshold, but worth knowing if a future feature leans on confidence more heavily.
+
+---
+
 ## Notes for whoever (human or agent) picks this file up
 
 - Don't reorder or renumber phases — TRACK_A_PROGRESS.md references them by number.
