@@ -7,11 +7,13 @@ LLM is available.
 """
 
 import json
+import logging
+import threading
 from typing import Any
 
 from backend.config import settings
 
-_TIMEOUT_SECONDS = 10
+logger = logging.getLogger(__name__)
 
 # Cache SUCCESSFUL completions only, keyed on the exact (prompt, schema_hint)
 # pair. Deliberately not a plain @lru_cache on the whole function: today's
@@ -64,7 +66,7 @@ def _complete_gemini(prompt: str, schema_hint: str) -> dict[str, Any] | None:
     response = model.generate_content(
         full_prompt,
         generation_config={"response_mime_type": "application/json", "temperature": 0.0},
-        request_options={"timeout": _TIMEOUT_SECONDS},
+        request_options={"timeout": settings.llm_timeout_seconds},
     )
     return json.loads(response.text)
 
@@ -72,7 +74,7 @@ def _complete_gemini(prompt: str, schema_hint: str) -> dict[str, Any] | None:
 def _complete_openai(prompt: str, schema_hint: str) -> dict[str, Any] | None:
     from openai import OpenAI
 
-    client = OpenAI(api_key=settings.openai_api_key, timeout=_TIMEOUT_SECONDS)
+    client = OpenAI(api_key=settings.openai_api_key, timeout=settings.llm_timeout_seconds)
     full_prompt = f"{prompt}\n\n{schema_hint}"
     response = client.chat.completions.create(
         model="gpt-4o-mini",
@@ -93,7 +95,7 @@ def _complete_groq(prompt: str, schema_hint: str) -> dict[str, Any] | None:
         messages=[{"role": "user", "content": full_prompt}],
         response_format={"type": "json_object"},
         temperature=0.0,
-        timeout=_TIMEOUT_SECONDS,
+        timeout=settings.llm_timeout_seconds,
     )
     return json.loads(response.choices[0].message.content)
 
@@ -113,9 +115,62 @@ def _complete_ollama(prompt: str, schema_hint: str) -> dict[str, Any] | None:
             "messages": [{"role": "user", "content": full_prompt}],
             "format": "json",
             "stream": False,
+            "keep_alive": settings.ollama_keep_alive,
             "options": {"temperature": 0.0},
         },
-        timeout=_TIMEOUT_SECONDS,
+        timeout=settings.llm_timeout_seconds,
     )
     response.raise_for_status()
     return json.loads(response.json()["message"]["content"])
+
+
+def warm_ollama() -> None:
+    """Fire a throwaway completion to load the Ollama model into VRAM at startup.
+
+    Called once from the FastAPI lifespan handler.  If Ollama is down or the
+    model is not pulled, logs a warning and returns — startup is NOT blocked.
+    The real requests will still fall back to the rules parser on any failure,
+    per Contract 1.
+    """
+    if settings.llm_provider != "ollama":
+        return
+    import requests
+
+    try:
+        response = requests.post(
+            f"{settings.ollama_base_url}/api/chat",
+            json={
+                "model": settings.ollama_model,
+                "messages": [{"role": "user", "content": "ping"}],
+                "format": "json",
+                "stream": False,
+                "keep_alive": settings.ollama_keep_alive,
+                "options": {"temperature": 0.0},
+            },
+            timeout=120,  # allow up to 2 min for model load on first warm-up
+        )
+        response.raise_for_status()
+        logger.info(
+            "Ollama pre-warm complete: model=%s keep_alive=%s",
+            settings.ollama_model,
+            settings.ollama_keep_alive,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Ollama pre-warm failed (model=%s): %s — LLM calls will fall back to rules parser",
+            settings.ollama_model,
+            exc,
+        )
+
+# ---------------------------------------------------------------------------
+# Module-level startup hook: fires warm_ollama() in a daemon thread the first
+# time this module is imported (i.e. at uvicorn startup).  Non-blocking —
+# startup completes normally while the model loads in the background.
+# ---------------------------------------------------------------------------
+def _start_prewarm() -> None:
+    if settings.llm_provider == "ollama":
+        t = threading.Thread(target=warm_ollama, daemon=True, name="ollama-prewarm")
+        t.start()
+
+
+_start_prewarm()
