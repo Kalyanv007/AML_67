@@ -6,7 +6,7 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-25, Phase 7 done.
+**Last updated:** 2026-07-25, live LLM verification done — Known Gap #1 resolved.
 
 ---
 
@@ -53,10 +53,41 @@ what a fresh clone actually runs.
 - 6 new tests locking in the above (2 in `test_intent.py`, 1 in `test_planner.py` rewritten, 2 in
   `test_integration.py`, plus the doc-driven verification wasn't a separate test file).
 
+### Live LLM verification (this update) — Known Gap #1 resolved
+User obtained a Gemini API key. First attempt (`gemini-2.0-flash`, the model already hardcoded in
+`llm/client.py`) failed with `429 RESOURCE_EXHAUSTED`, `limit: 0` — not rate-limit exhaustion, a **hard
+zero quota** for that model on this account. Investigated via `genai.list_models()` rather than guessing
+model names blindly: this account's free tier no longer includes `gemini-1.5-flash` (404, fully retired)
+or `gemini-2.0-flash`/`gemini-2.0-flash-lite` (zero quota), but does include a `gemini-3.x` generation and
+several `-latest` aliases. **Switched to `gemini-flash-latest`** — an alias Google maintains to always
+point at the current recommended flash model, specifically chosen over a dated version string so this
+doesn't go stale again the way `1.5-flash` did.
+
+Verified against the live API (not just that it responds — that it's *correct*):
+- `complete_json()` directly: valid JSON, correctly structured.
+- `parse_intent()` end-to-end: "Is customer 4521 suspicious?" → correctly classified, entity **normalized
+  to `C-04521` by the LLM itself** per the schema hint. "Find structuring patterns in the last 30 days" →
+  LLM returned relative-date shorthand (`{"date_from": "-30d", "date_to": "now"}`) that isn't a valid ISO
+  date, failed `Filters` Pydantic validation, and **safely fell back to the regex parser** — the fallback
+  design worked exactly as intended, not a bug.
+- **The real payoff**: re-ran the 3 messy/slang queries from an earlier session that the regex fallback
+  had gotten wrong ("...doing anything shady", "3 sketchiest customers", "10+ deposits below 10k") — **all
+  3 now classify correctly** via the LLM (`entity_investigation`, `ranking` with `top_n=3`, and
+  count/amount filters extracted correctly respectively). This is the concrete evidence that the LLM path
+  adds real value over the regex fallback, not just a checkbox. One minor imprecision: the third query got
+  `pattern_search` rather than the arguably-more-correct `threshold_query` — a classification nuance, not
+  an error (filters extracted were still correct).
+- `narrator._explain()` on a HIGH-risk row: produced accurate, well-written analyst prose with zero
+  invented numbers (every figure traceable to the input evidence dict) — the LLM polish is doing real
+  work, not just reformatting.
+- Full round-trip through the **actual deployed HTTP API** (`uvicorn` + `curl`, not just Python calls):
+  `/health` → `"llm_available": true`; a live messy query → correctly parsed via LLM, correct flag count.
+
+`pytest tests/ -v` → still 185/185 (tests stub `complete_json`, unaffected by the model name change).
+
 ### Immediate next action
-No Track A phase work remains in the original 7-phase plan. Open items, none blocking:
-- **Live LLM-key smoke test** (Known Gaps #1) — still waiting on the user to obtain a
-  Gemini/OpenAI key. Do this before depending on the LLM path in an actual judged demo.
+No Track A phase work remains in the original 7-phase plan, and the LLM path is now verified. Open items,
+none blocking:
 - **Quantitative precision/recall/FP table** against the IBM label — flagged in README as "not yet done,"
   arguably Track B's analytical work per WORKPLAN §6, not built here; ask before doing it.
 - Rehearsing the full demo script end-to-end 2-3 times before presenting (README's Setup section is the
@@ -111,11 +142,11 @@ No Track A phase work remains in the original 7-phase plan. Open items, none blo
 | `backend/tools/_mocks.py` | Complete — unchanged since Phase 0. `C-04521` is the pre-wired "obviously flagged" customer (structuring, R1, risk 78/high/report) — used as the default fixture across all tests |
 | `backend/agent/registry.py` | Complete — fixed in Phase 6: `TOOLS.clear()` + `importlib.reload()` on every call so `load_tools()` is deterministic in its requested mode regardless of prior calls in-process |
 | `backend/config.py` | Complete — unchanged since Phase 0 |
-| `backend/llm/client.py` | Complete — `complete_json()`, Gemini/OpenAI behind `settings.llm_provider`, returns `None` on any failure. **Still not exercised against a real API key** — only tested with it monkeypatched to return `None` (see Known Gaps) |
-| `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback. **Phase 7 fixes**: entity regex now accepts real alphanumeric IDs (`[CT]-[A-Z0-9]{2,8}`, not just digits); relative dates anchor to the dataset's own max date (`_dataset_reference_date()`) instead of wall-clock `date.today()` |
+| `backend/llm/client.py` | Complete — `complete_json()`, Gemini/OpenAI behind `settings.llm_provider`, returns `None` on any failure. **Verified live against a real Gemini key**; model changed from hardcoded `gemini-2.0-flash` (zero free-tier quota on this account) to the `gemini-flash-latest` alias, discovered via `genai.list_models()` rather than guessing |
+| `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback, **both paths now live-verified**. Phase 7 fixes: entity regex accepts real alphanumeric IDs; relative dates anchor to the dataset's own max date. Live-LLM finding: the LLM correctly classifies messy/slang phrasing the regex fallback missed, but returns relative-date shorthand (`"-30d"`) instead of ISO dates for date filters — safely rejected by Pydantic validation and falls back to regex (which handles dates correctly), not a crash |
 | `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params match Track B's actual tool signatures (Phase 6). **Phase 7 fix**: `explain_flag` now loads data and scores the entity fresh (deviates from Contract 4's original "reuse cached run" text, which was never wired to anything — documented inline) |
 | `backend/agent/executor.py` | Complete — core loop, timing, error isolation, re-planning branches, `_resolve_entities()` (post-Phase-6). **Phase 7 fix**: `_summarise()` now has dedicated, accurate messages for `explain_flag` and `eda` (previously fell through to a detection-flavoured generic message that didn't fit either) |
-| `backend/agent/narrator.py` | Complete — `_build_evidence()`, template explanations, LLM polish capped to HIGH-risk flags only (untested against a real key, see Known Gaps #1), escalation mapping, SAR draft for HIGH |
+| `backend/agent/narrator.py` | Complete — `_build_evidence()`, template explanations, LLM polish capped to HIGH-risk flags only. **Live-verified**: produces accurate analyst prose with zero invented numbers on a real HIGH-risk row. Escalation mapping, SAR draft for HIGH |
 | `backend/main.py` | Complete — `/health`, `/query`, `/dataset/summary`, `/plan/{plan_id}` all live, verified against both mocks and real tools, and against the real HTTP API with `AML_USE_MOCKS=0` |
 | `requirements.txt` | `kaggle` + `kagglehub` added (Phase 6 / Phase 7 respectively — `kagglehub` is what `data_loader.py` actually imports; missing before, would have `ImportError`'d on the IBM loader path on a clean clone) |
 | `.env.example` | **Phase 7 fix**: `AML_API_BASE_URL` (dead — nothing read it) → `AML_API_URL` (what `frontend/app.py` actually reads); `AML_USE_MOCKS` default `1→0` now that real tools exist |
@@ -146,11 +177,16 @@ query buttons, plan-trace panel, flag cards, FIXTURE-mode fallback when the API 
 
 ## Known gaps / honest caveats (don't assume these are solved)
 
-1. **The LLM path has never actually been called against a real key.** Still true — user doesn't have a
-   Gemini/OpenAI key yet. Every test stubs `complete_json` to return `None`. **Blocked, not forgotten**:
-   do a manual smoke test of `parse_intent()` and `narrator._explain()` against the real API the moment a
-   key is available, before trusting that path in a demo — JSON-parsing and prompt-following behaviour of
-   a live model is the one thing that can't be verified without one.
+1. ~~The LLM path has never actually been called against a real key~~ — **resolved**. Live-verified against
+   a real Gemini key: `complete_json()`, `parse_intent()` (both success and safe-fallback paths), and
+   `narrator._explain()` all behave correctly. Model switched from a hardcoded `gemini-2.0-flash` (zero
+   free-tier quota on this account — discovered via a live 429, not assumed) to the `gemini-flash-latest`
+   alias. Tests still stub `complete_json` (correctly — no test should depend on network/a live key), so
+   this remains a manual-verification-only gap by design, re-confirm after any provider/model change.
+   **New sub-finding**: the LLM returns relative-date shorthand (`"-30d"`) for date filters rather than
+   ISO dates; this fails Pydantic validation and safely falls back to regex (which handles dates
+   correctly via `_dataset_reference_date()`) — not a bug, but means date-filter accuracy currently comes
+   from the regex path even on LLM-classified queries, not the LLM.
 2. ~~No `tests/test_narrator.py`~~ — **resolved**: added, 4 tests. Covers the HIGH-risk-only LLM-polish
    cap (below), LLM-failure fallback, SAR draft gating, escalation defaulting. Multi-rule-per-entity and
    ML-only-flag explanation paths still untested directly, but low risk (simple template code, same
@@ -314,6 +350,17 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
     a working local `.env` is exactly what Phase 7 was trying to produce. The `.env` file itself is
     gitignored and won't propagate to Track B or CI, but the test fragility it exposed was real and now
     fixed regardless of whose machine has a `.env`.
+19. **Live LLM key obtained; model name changed from `gemini-2.0-flash` to `gemini-flash-latest`.**
+    First live call failed with `429 RESOURCE_EXHAUSTED, limit: 0` — investigated via
+    `genai.list_models()` (the actual API, not assumption) rather than guessing more model name strings.
+    Found this account's free tier doesn't include `gemini-1.5-flash` (404, retired) or `gemini-2.0-flash`
+    (zero quota), but does include several `-latest` aliases and a newer dated generation. Chose the
+    `-latest` alias specifically **so this doesn't recur** — a hardcoded dated version string will keep
+    going stale as Google rotates free-tier model availability; an alias tracks whatever's current.
+    **Full pytest suite (185/185) is unaffected**, confirming the test suite correctly never depends on a
+    live key (by design — `complete_json` is always stubbed in tests). This is the intended boundary: unit
+    tests prove the code is correct assuming a well-formed LLM response or `None`; only manual live
+    verification (done here) proves the actual provider integration and model choice work.
 
 ---
 

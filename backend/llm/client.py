@@ -29,7 +29,11 @@ def _complete_gemini(prompt: str, schema_hint: str) -> dict[str, Any] | None:
     import google.generativeai as genai
 
     genai.configure(api_key=settings.gemini_api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    # "latest" alias, not a dated version string — Google periodically retires
+    # specific model versions (gemini-1.5-flash 404s now; gemini-2.0-flash has
+    # zero free-tier quota on new accounts), so pinning to a version drifts out
+    # of the free tier over time. The alias tracks whatever's current.
+    model = genai.GenerativeModel("gemini-flash-latest")
     full_prompt = f"{prompt}\n\n{schema_hint}\nRespond with strict JSON only, no markdown fences."
     response = model.generate_content(
         full_prompt,
