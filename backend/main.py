@@ -1,18 +1,23 @@
 """
 FastAPI app. Owner: Track A. Endpoints per docs/CONTRACTS.md Contract 1 HTTP surface.
 
-The /query pipeline (intent_parser -> planner -> executor -> narrator) is not yet
-implemented (see those modules' docstrings, WORKPLAN.md Track A schedule). Until
-then this returns 501 rather than crashing, so the server boots and /health works
-for Track B / integration testing from hour 0.
+/query runs the full intent_parser -> planner -> executor -> narrator pipeline.
+/dataset/summary calls load_data directly (works against mocks; swaps to Track
+B's real loader automatically once AML_USE_MOCKS=0 and backend/tools/data_loader.py
+exists, since it goes through the same registry).
 """
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from backend.agent import registry
+from backend.agent.executor import run_plan
+from backend.agent.intent_parser import parse_intent
+from backend.agent.planner import build_plan
 from backend.config import settings
 from backend.schemas import AgentResponse
+from backend.tools.base import ToolContext
 
 app = FastAPI(title="AML Suspicious Activity Detection Agent")
 
@@ -23,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# plan_id -> AgentResponse, populated once /query is implemented (WORKPLAN.md H16-H24)
+# plan_id -> AgentResponse, populated by /query, read back by /plan/{plan_id}
 _RUN_CACHE: dict[str, AgentResponse] = {}
 
 
@@ -43,15 +48,28 @@ def health() -> dict:
 
 @app.get("/dataset/summary")
 def dataset_summary() -> dict:
-    raise HTTPException(status_code=501, detail="Not implemented yet — see backend/tools/data_loader.py (Track B)")
+    tools = registry.load_tools(use_mocks=settings.aml_use_mocks)
+    load_data = tools.get("load_data")
+    if load_data is None:
+        raise HTTPException(status_code=501, detail="load_data tool not available")
+
+    ctx = ToolContext(df=None, customers=None, intent=None, artifacts={})
+    result = load_data(ctx)
+    df = result.df if result.df is not None else ctx.df
+    return {
+        "row_count": 0 if df is None else len(df),
+        "customer_count": 0 if ctx.customers is None else len(ctx.customers),
+        "columns": [] if df is None else list(df.columns),
+    }
 
 
 @app.post("/query", response_model=AgentResponse)
 def query(request: QueryRequest) -> AgentResponse:
-    raise HTTPException(
-        status_code=501,
-        detail="Not implemented yet — see backend/agent/{intent_parser,planner,executor,narrator}.py (Track A)",
-    )
+    intent = parse_intent(request.query)
+    plan = build_plan(intent)
+    response = run_plan(intent, plan)
+    _RUN_CACHE[plan.plan_id] = response
+    return response
 
 
 @app.get("/plan/{plan_id}", response_model=AgentResponse)

@@ -1,18 +1,53 @@
 """
 Provider-agnostic LLM client. Owner: Track A.
 
-Implementation pending (WORKPLAN.md Track A, H2-H8). Must stay provider-agnostic
-(Gemini or OpenAI, selected via backend.config.settings.llm_provider) and must
-return None on any failure (missing key, timeout, rate limit, bad JSON) so every
-caller has a defined fallback path — never let a caller assume the LLM is available.
+complete_json() returns None on ANY failure (no key, timeout, rate limit, bad
+JSON) so every caller has a defined non-LLM fallback path — never assume the
+LLM is available.
 """
 
+import json
 from typing import Any
+
+from backend.config import settings
+
+_TIMEOUT_SECONDS = 10
 
 
 def complete_json(prompt: str, schema_hint: str = "") -> dict[str, Any] | None:
-    """Send `prompt` to the configured LLM provider and parse a JSON object from
-    the response. Returns None on any failure (no key, timeout, bad JSON, etc.)
-    so callers must always have a non-LLM fallback.
-    """
-    raise NotImplementedError("Track A: implement LLM call + JSON parsing, see WORKPLAN.md H2-H8")
+    try:
+        if settings.llm_provider == "gemini" and settings.gemini_api_key:
+            return _complete_gemini(prompt, schema_hint)
+        if settings.llm_provider == "openai" and settings.openai_api_key:
+            return _complete_openai(prompt, schema_hint)
+    except Exception:
+        return None
+    return None
+
+
+def _complete_gemini(prompt: str, schema_hint: str) -> dict[str, Any] | None:
+    import google.generativeai as genai
+
+    genai.configure(api_key=settings.gemini_api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
+    full_prompt = f"{prompt}\n\n{schema_hint}\nRespond with strict JSON only, no markdown fences."
+    response = model.generate_content(
+        full_prompt,
+        generation_config={"response_mime_type": "application/json", "temperature": 0.0},
+        request_options={"timeout": _TIMEOUT_SECONDS},
+    )
+    return json.loads(response.text)
+
+
+def _complete_openai(prompt: str, schema_hint: str) -> dict[str, Any] | None:
+    from openai import OpenAI
+
+    client = OpenAI(api_key=settings.openai_api_key, timeout=_TIMEOUT_SECONDS)
+    full_prompt = f"{prompt}\n\n{schema_hint}"
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": full_prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.0,
+    )
+    return json.loads(response.choices[0].message.content)
