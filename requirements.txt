@@ -1,0 +1,33 @@
+# AML Suspicious Activity Detection Agent — common requirements (Track A + Track B)
+# Install: pip install -r requirements.txt
+# One dependency per line. Do not re-sort. Add new deps at the end of the relevant section.
+
+# --- Web / API (Track A) ---
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+pydantic==2.9.2
+pydantic-settings==2.6.0
+python-dotenv==1.0.1
+httpx==0.27.2
+
+# --- LLM client (Track A) ---
+google-generativeai==0.8.3
+openai==1.51.0
+
+# --- Data / ML (Track B) ---
+pandas==2.2.3
+numpy==2.1.2
+scikit-learn==1.5.2
+networkx==3.4.1
+
+# --- Frontend (Track B) ---
+streamlit==1.39.0
+plotly==5.24.1
+requests==2.32.3
+
+# --- Notebooks (Track B) ---
+jupyter==1.1.1
+
+# --- Testing (both) ---
+pytest==8.3.3
+pytest-mock==3.14.0
