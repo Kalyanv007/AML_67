@@ -220,3 +220,23 @@ def test_false_positive_reduction_vs_naive_baseline(real_tools):
     )
     # sanity: we shouldn't be achieving low FPR by simply not flagging anyone
     assert len(our_flagged & positives) > 0, "our system caught zero true positives"
+
+
+def test_full_analysis_response_is_actually_json_serializable(real_tools):
+    """Regression test for a real bug found live: eda_profile's Plotly figures
+    (via .to_dict()) embed raw numpy.ndarray values in trace data (x/y/text/
+    marker.color). AgentResponse.charts is Any-typed, so Pydantic validates
+    these fine at construction time — but FastAPI's JSON response
+    serialization crashed with PydanticSerializationError once this actually
+    reached the HTTP layer. Every other test calls run_plan() directly and
+    inspects the object, which never exercises serialization — this test
+    exists specifically to catch that gap. A 500 on the demo's flagship query
+    is the worst possible thing to have work in tests and fail live."""
+    intent = QueryIntent(raw_query="Analyse this dataset for suspicious activity",
+                          intent="full_analysis", parsed_by="rules", confidence=0.9)
+    plan = build_plan(intent)
+    response = run_plan(intent, plan)
+
+    assert response.charts, "expected eda_profile to have produced charts to test against"
+    # this is the exact call FastAPI makes when returning the response over HTTP
+    response.model_dump_json()

@@ -9,6 +9,7 @@ cover all 7 intents well enough to demo on (see docs/CONTRACTS.md Contract 4).
 import functools
 import re
 from datetime import date, timedelta
+from typing import Any
 
 import pandas as pd
 
@@ -79,11 +80,72 @@ def parse_intent(raw_query: str, reference_date: date | None = None) -> QueryInt
     llm_result = complete_json(f'Classify this AML compliance query: "{raw_query}"', _SCHEMA_HINT)
     if llm_result is not None:
         try:
-            return QueryIntent(raw_query=raw_query, parsed_by="llm", **llm_result)
+            sanitized = _sanitize_llm_result(llm_result, reference_date)
+            return QueryIntent(raw_query=raw_query, parsed_by="llm", **sanitized)
         except Exception:
             pass  # malformed LLM output -> fall through to the regex parser
 
     return _parse_with_rules(raw_query, reference_date)
+
+
+_RELATIVE_SHORTHAND_RE = re.compile(r"^-?(\d+)\s*(d|day|days|w|week|weeks|m|month|months|y|year|years)$", re.I)
+_RELATIVE_AGO_RE = re.compile(r"^(\d+)\s+(day|days|week|weeks|month|months|year|years)\s+ago$", re.I)
+_UNIT_DAYS = {"d": 1, "w": 7, "m": 30, "y": 365}
+
+
+def _coerce_relative_date(value: Any, reference_date: date) -> str | None:
+    """LLM providers commonly return relative-date shorthand for filters
+    (Gemini: "-30d"/"now"; Groq: "1 month ago") instead of ISO dates. Filters'
+    strict `date` type rejects these, which previously threw away the *entire*
+    LLM-parsed QueryIntent (intent, entities, patterns — everything) over one
+    bad field, silently falling back to the regex parser. Coerce what can be
+    recognised, anchored to the same dataset reference date the regex fallback
+    uses; drop (return None) anything unrecognisable rather than fail the parse.
+    """
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value.isoformat()
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        date.fromisoformat(text)
+        return text
+    except ValueError:
+        pass
+    lowered = text.lower()
+    if lowered in ("now", "today"):
+        return reference_date.isoformat()
+    m = _RELATIVE_SHORTHAND_RE.match(lowered) or _RELATIVE_AGO_RE.match(lowered)
+    if m:
+        n = int(m.group(1))
+        unit_days = _UNIT_DAYS[m.group(2)[0]]
+        return (reference_date - timedelta(days=n * unit_days)).isoformat()
+    return None
+
+
+def _sanitize_llm_result(llm_result: dict, reference_date: date) -> dict:
+    result = dict(llm_result)
+    # confidence/top_n are non-Optional QueryIntent fields — an explicit None
+    # from the LLM must be dropped so the field default applies, not passed
+    # through (Pydantic rejects None for a plain `float`/`int` field).
+    for key in ("confidence", "top_n"):
+        if result.get(key) is None:
+            result.pop(key, None)
+    filters = result.get("filters")
+    if isinstance(filters, dict):
+        for key in ("date_from", "date_to"):
+            if key in filters:
+                filters[key] = _coerce_relative_date(filters[key], reference_date)
+        # countries/txn_types are non-Optional `list[str] = []` Filters fields —
+        # same class of bug as confidence/top_n above, but nested.
+        for key in ("countries", "txn_types"):
+            if filters.get(key) is None:
+                filters.pop(key, None)
+    return result
 
 
 def _parse_with_rules(raw_query: str, reference_date: date) -> QueryIntent:

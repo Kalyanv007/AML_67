@@ -89,3 +89,68 @@ def test_pattern_type_extraction():
 def test_top_n_extraction():
     result = parse_intent("Top 5 highest-risk customers")
     assert result.top_n == 5
+
+
+def test_llm_result_with_relative_date_shorthand_and_none_fields_still_parses_as_llm(monkeypatch):
+    """Regression test for a real bug found live: both Gemini ("-30d"/"now")
+    and Groq ("1 month ago") return relative-date shorthand instead of ISO
+    dates for filters.date_from/date_to, and Groq also returns explicit
+    `None` for confidence/top_n/countries/txn_types — all of which used to
+    fail Filters/QueryIntent's strict validation and silently discard the
+    ENTIRE LLM-parsed result (intent, entities, patterns included) in favour
+    of the regex fallback. This is the exact dict captured live from Groq for
+    "who are the top 10 suspicious customers in the last month"."""
+    captured_groq_output = {
+        "intent": "ranking",
+        "filters": {"date_from": "1 month ago", "date_to": "now", "countries": None, "txn_types": None,
+                    "amount_min": None, "amount_max": None, "min_txn_count": None, "customer_segment": None},
+        "entities": [],
+        "pattern_types": ["structuring", "smurfing", "layering", "rapid_cashout", "velocity", "dormant_reactivation"],
+        "top_n": 10,
+        "confidence": None,
+    }
+    monkeypatch.setattr("backend.agent.intent_parser.complete_json", lambda *a, **kw: captured_groq_output)
+
+    result = parse_intent("who are the top 10 suspicious customers in the last month",
+                           reference_date=date(2025, 3, 31))
+
+    assert result.parsed_by == "llm"
+    assert result.intent == "ranking"
+    assert result.top_n == 10
+    assert result.confidence == 0.0  # field default, not a validation crash
+    assert result.filters.date_from == date(2025, 3, 1)  # "1 month ago" resolved against reference_date
+    assert result.filters.date_to == date(2025, 3, 31)   # "now" resolved against reference_date
+    assert result.filters.countries == []
+    assert result.filters.txn_types == []
+
+
+def test_llm_result_with_gemini_style_shorthand_dates(monkeypatch):
+    """Same bug class, Gemini's shorthand form ("-30d") rather than Groq's
+    ("1 month ago") — both must resolve through the same coercion path."""
+    llm_output = {
+        "intent": "pattern_search",
+        "filters": {"date_from": "-30d", "date_to": "now"},
+        "entities": [], "pattern_types": ["structuring"], "top_n": 10, "confidence": 0.98,
+    }
+    monkeypatch.setattr("backend.agent.intent_parser.complete_json", lambda *a, **kw: llm_output)
+
+    result = parse_intent("Find structuring patterns in the last 30 days",
+                           reference_date=date(2025, 3, 31))
+
+    assert result.parsed_by == "llm"
+    assert result.filters.date_from == date(2025, 3, 1)
+    assert result.filters.date_to == date(2025, 3, 31)
+
+
+def test_unrecognisable_date_string_drops_field_without_failing_the_parse(monkeypatch):
+    """An LLM date value that isn't ISO, "now"/"today", or a recognised
+    relative-shorthand pattern should be dropped (None) rather than crash the
+    whole QueryIntent construction and lose the LLM's otherwise-good parse."""
+    llm_output = {"intent": "eda", "filters": {"date_from": "sometime in the spring"},
+                  "entities": [], "pattern_types": [], "top_n": 10, "confidence": 0.7}
+    monkeypatch.setattr("backend.agent.intent_parser.complete_json", lambda *a, **kw: llm_output)
+
+    result = parse_intent("show me spring transactions")
+
+    assert result.parsed_by == "llm"
+    assert result.filters.date_from is None

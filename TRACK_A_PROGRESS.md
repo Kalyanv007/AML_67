@@ -6,7 +6,8 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-26, Groq LLM provider added, wired, and live-verified as a third provider option.
+**Last updated:** 2026-07-26, fixed 2 real bugs found from user-reported live symptoms (numpy JSON
+serialization crash on full_analysis; LLM-result field validation causing false fallback-to-rules).
 
 ---
 
@@ -142,12 +143,69 @@ downstream hard-gates on exact confidence values beyond the `<0.4` "low confiden
 `pytest tests/ -v` → **186/186 passing, confirmed** with `LLM_PROVIDER=groq` active in `.env` (tests
 correctly stub `complete_json`, unaffected by the provider change).
 
+### Two real bugs found from user-reported symptoms (this update)
+User reported two live symptoms while manually testing with Groq active: (1) "who are the top 10
+suspicious customers in the last month" showed `parsed_by: rules` in the plan trace despite the LLM being
+active — expected `llm`; (2) "analyse this dataset for suspicious activity" timed out and the frontend
+fell back to fixture data (whose `parsed_by: llm` is hardcoded in the fixture JSON, not real). Investigated
+both rather than guessing — found two distinct, real bugs, plus one non-bug external factor.
+
+**Bug A — numpy arrays crash JSON serialization on `full_analysis` (the actual cause of symptom 2).**
+`eda_profile`'s Plotly figures (`.to_dict()` output) embed raw `numpy.ndarray` values in trace data
+(`x`/`y`/`text`/`marker.color`). `AgentResponse.charts` is `Any`-typed (Contract 1), so Pydantic validates
+these fine at construction — but crashes with `PydanticSerializationError: Unable to serialize unknown
+type: <class 'numpy.ndarray'>` when FastAPI actually serializes the response to JSON over HTTP. **This was
+invisible to every test in the suite**, because `run_plan()` is always called directly and inspected as a
+Python object — nothing before this ever exercised `response.model_dump_json()`, the actual call FastAPI
+makes. A live `curl` measured this at 53s wall-clock **and HTTP 500**, not a network timeout — the frontend
+plausibly reported it as "timed out" because a 500 with a huge stack trace over a slow connection reads
+that way, or because the request approached the frontend's own timeout first. Fixed in `executor.py`:
+`_sanitize_for_json()` recursively converts `numpy.ndarray`→`.tolist()` and `numpy.generic`→`.item()`,
+applied once to `response.tables`/`charts`/`metrics` at the end of `run_plan()`. This is a generic safety
+net (protects against any tool leaking numpy types, not just `eda_profile`) that required **zero changes
+to Track B's files** — the fix belongs on the response-shaping side, not the tool side.
+
+**Bug B — LLM-result field validation was throwing away the entire parse over one bad field (the actual
+cause of symptom 1).** Traced `parse_intent()` for the exact failing query and found the LLM (Groq)
+correctly identified `intent: "ranking"` but returned `confidence: None`, `filters.countries: None`,
+`filters.txn_types: None` (all three fail Pydantic validation for non-Optional fields — `float`, `list[str]`,
+`list[str]` respectively) and `filters.date_from: "1 month ago"` / `date_to: "now"` (relative-date
+shorthand, not ISO — same class of issue already known from the Gemini episode, but not yet generalised
+into a real fix). Any ONE of these failing validation discarded the **entire** correct LLM classification,
+silently falling back to the regex parser. Fixed in `intent_parser.py`: `_sanitize_llm_result()` now (1)
+drops `confidence`/`top_n` when explicitly `None` so field defaults apply, (2) drops `filters.countries`/
+`filters.txn_types` the same way, and (3) `_coerce_relative_date()` resolves recognised relative-date
+forms (`"now"`/`"today"`, `"-30d"` Gemini-style, `"1 month ago"` Groq-style) against the same
+`_dataset_reference_date()` anchor already used by the regex path — anything genuinely unrecognisable is
+dropped (`None`) rather than failing the whole parse. **Verified against the exact captured Groq output**
+(stubbed, not live) — now produces `parsed_by: "llm"` with correctly resolved dates
+(`2025-03-01`→`2025-03-31`), not a fallback.
+
+**External factor, not a bug — both free-tier keys are currently quota-exhausted from today's testing.**
+While investigating, direct calls to `_complete_groq`/`_complete_gemini` (bypassing `complete_json`'s
+silent `except Exception: return None`) surfaced the *real* live errors: Groq's daily token quota
+(100,000 TPD) is at ~99,900+ used; Gemini's free tier for the resolved model (`gemini-3.6-flash`, via the
+`gemini-flash-latest` alias) allows only **20 requests/day**, also exhausted. This means `parsed_by: rules`
+is currently the *correct, safe, expected* behavior for any query, on either provider, until quota resets —
+not something further code changes can fix. One consequence worth flagging: the Groq SDK appears to retry
+internally against `429`s for a long time before giving up (one call took 54s to eventually succeed) —
+this likely compounded symptom 2's perceived slowness on top of Bug A.
+
+Both fixes verified two ways: (1) directly, replaying the exact captured problematic LLM output through
+`parse_intent()`/`run_plan()` with the network call stubbed (since live quota is exhausted, this is the
+only way to prove correctness right now); (2) locked in with new regression tests — `tests/test_intent.py`
+(3 new: Groq-style shorthand+None fields, Gemini-style shorthand, unrecognisable-date-drops-gracefully)
+and `tests/test_integration.py` (1 new: asserts `response.model_dump_json()` succeeds for a real
+`full_analysis` run — this is the test that should have existed before and didn't).
+
+`pytest tests/ -v` → **190/190 passing, confirmed** (186 + these 4 new regression tests).
+
 ### Immediate next action
-No Track A phase work remains in the original 7-phase plan. Three LLM providers now wired and each
-individually live-verified (Gemini, Groq; OpenAI has code but was never actually tested live — nobody
-has tried an OpenAI key on this project). Only open item: rehearsing the full demo end-to-end 2-3 times
-before presenting (README's Setup/Usage sections are the closest thing to a script; no dedicated
-`DEMO_SCRIPT.md` from Track B seen yet).
+No Track A phase work remains in the original 7-phase plan. Three LLM providers wired; Gemini and Groq
+each individually live-verified at least once (both now quota-exhausted for today — re-verify live once a
+quota resets, though the stubbed-replay verification above is solid evidence the fix itself is correct).
+Only open item: rehearsing the full demo end-to-end 2-3 times before presenting (README's Setup/Usage
+sections are the closest thing to a script; no dedicated `DEMO_SCRIPT.md` from Track B seen yet).
 
 ---
 
@@ -209,9 +267,9 @@ before presenting (README's Setup/Usage sections are the closest thing to a scri
 | `backend/agent/registry.py` | Complete — fixed in Phase 6: `TOOLS.clear()` + `importlib.reload()` on every call so `load_tools()` is deterministic in its requested mode regardless of prior calls in-process |
 | `backend/config.py` | Complete — added `groq_api_key: str = ""` field (originated on teammate's machine, already present here when this update started) |
 | `backend/llm/client.py` | Complete — `complete_json()` now supports **three** providers (Gemini/OpenAI/Groq) behind `settings.llm_provider`, returns `None` on any failure. Gemini and Groq both **live-verified** end-to-end (model names checked against each account's live `list_models()` before trusting them, not assumed) — Gemini uses `gemini-flash-latest`, Groq uses `llama-3.3-70b-versatile`. OpenAI's branch has code but has never actually been tested live by anyone on this project |
-| `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback, **both paths now live-verified**. Phase 7 fixes: entity regex accepts real alphanumeric IDs; relative dates anchor to the dataset's own max date. Live-LLM finding: the LLM correctly classifies messy/slang phrasing the regex fallback missed, but returns relative-date shorthand (`"-30d"`) instead of ISO dates for date filters — safely rejected by Pydantic validation and falls back to regex (which handles dates correctly), not a crash |
+| `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback, both paths live-verified. `_sanitize_llm_result()` (new) fixes the real bug where any one invalid LLM field (relative-date shorthand, explicit `None` for non-Optional fields) discarded the *entire* LLM parse in favour of regex — now coerces what it can (`_coerce_relative_date()` handles `"-30d"`, `"1 month ago"`, `"now"`/`"today"`, anchored to `_dataset_reference_date()`) and drops only the unfixable field |
 | `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params match Track B's actual tool signatures (Phase 6). **Phase 7 fix**: `explain_flag` now loads data and scores the entity fresh (deviates from Contract 4's original "reuse cached run" text, which was never wired to anything — documented inline) |
-| `backend/agent/executor.py` | Complete — core loop, timing, error isolation, re-planning branches, `_resolve_entities()` (post-Phase-6). **Phase 7 fix**: `_summarise()` now has dedicated, accurate messages for `explain_flag` and `eda` (previously fell through to a detection-flavoured generic message that didn't fit either) |
+| `backend/agent/executor.py` | Complete — core loop, timing, error isolation, re-planning branches, `_resolve_entities()`, intent-specific `_summarise()` messages. **`_sanitize_for_json()` (new)** fixes a real crash: `response.tables`/`charts`/`metrics` are `Any`-typed, so a raw `numpy.ndarray` (from `eda_profile`'s Plotly output) validates fine but crashes FastAPI's JSON serializer — invisible to every test since none previously called `.model_dump_json()`, only `run_plan()` directly |
 | `backend/agent/narrator.py` | Complete — `_build_evidence()`, template explanations, LLM polish capped to HIGH-risk flags only. **Live-verified**: produces accurate analyst prose with zero invented numbers on a real HIGH-risk row. Escalation mapping, SAR draft for HIGH |
 | `backend/main.py` | Complete — `/health`, `/query`, `/dataset/summary`, `/plan/{plan_id}` all live, verified against both mocks and real tools, and against the real HTTP API with `AML_USE_MOCKS=0` |
 | `requirements.txt` | `kaggle` + `kagglehub` added (Phase 6 / Phase 7 respectively — `kagglehub` is what `data_loader.py` actually imports; missing before, would have `ImportError`'d on the IBM loader path on a clean clone) |
@@ -435,7 +493,7 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
 1. Read this file top to bottom.
 2. Check `git log --oneline -5` to confirm nothing has changed since "Last updated" above — if it has,
    treat this file as stale until reconciled.
-3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 186/186-passing baseline still holds
+3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 190/190-passing baseline still holds
    before changing anything. If it's flaky or order-dependent, suspect either `backend/tools/base.py`'s
    global `TOOLS` dict (decision log #10) or ambient `.env`/`settings.aml_use_mocks` state leaking into
    tests that assume mock mode without forcing it (decision log #18) before assuming new test code is wrong.

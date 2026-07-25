@@ -13,6 +13,8 @@ import re
 import time
 from typing import Any
 
+import numpy as np
+
 from backend.agent import registry
 from backend.agent.narrator import build_flags
 from backend.config import settings
@@ -124,7 +126,29 @@ def run_plan(intent: QueryIntent, plan: ExecutionPlan) -> AgentResponse:
     if not response.summary:
         response.summary = _summarise(intent, response)
     plan.steps = steps
+
+    # tables/charts/metrics are Any-typed (Contract 1) — Pydantic validates but
+    # does not coerce their *contents*, so a raw numpy.ndarray (e.g. embedded in
+    # eda_profile's Plotly-figure .to_dict() output) passes straight through.
+    # FastAPI's JSON response serialization then crashes on it — invisible to
+    # every test here, since none of them serialize the response to JSON
+    # (run_plan() is called directly, only the real HTTP layer hits this).
+    response.tables = _sanitize_for_json(response.tables)
+    response.charts = _sanitize_for_json(response.charts)
+    response.metrics = _sanitize_for_json(response.metrics)
     return response
+
+
+def _sanitize_for_json(obj: Any) -> Any:
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    if isinstance(obj, np.generic):
+        return obj.item()
+    if isinstance(obj, dict):
+        return {k: _sanitize_for_json(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize_for_json(v) for v in obj]
+    return obj
 
 
 def _resolve_entities(entities: list[str], customers: Any) -> tuple[list[str], list[str]]:

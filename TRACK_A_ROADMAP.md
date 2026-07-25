@@ -426,6 +426,41 @@ threshold, but worth knowing if a future feature leans on confidence more heavil
 
 ---
 
+## Standalone fix — Two real bugs from user-reported live symptoms ✅ DONE
+
+User reported two symptoms while manually testing with Groq active: a ranking query showed
+`parsed_by: rules` despite the LLM being on, and a full_analysis query timed out and fell back to
+frontend fixture data. Investigated both rather than assuming either was expected behavior.
+
+**Bug A (cause of the timeout): numpy arrays crash JSON serialization.** `eda_profile`'s Plotly figures
+embed raw `numpy.ndarray` in trace data. `AgentResponse.charts` is `Any`-typed, so Pydantic validates fine
+at construction but crashes (`PydanticSerializationError`) when FastAPI actually serializes to JSON —
+invisible to every test, since all of them call `run_plan()` directly and never exercise
+`.model_dump_json()`. A live `curl` measured this as 53s wall-clock + **HTTP 500**, not a network timeout.
+Fixed in `executor.py` with `_sanitize_for_json()`, applied once to `tables`/`charts`/`metrics` at the end
+of `run_plan()` — a generic safety net, zero changes needed to Track B's `eda.py`.
+
+**Bug B (cause of the false rules-fallback): one bad LLM field discarded the entire parse.** Traced the
+exact query and found Groq correctly said `intent: "ranking"` but also returned `confidence: None` and
+`filters.countries/txn_types: None` (invalid for non-Optional fields) plus `date_from: "1 month ago"` /
+`date_to: "now"` (relative shorthand, not ISO). Any one of these failing validation threw away the whole
+LLM result. Fixed in `intent_parser.py` with `_sanitize_llm_result()` (drops explicit `None` for
+non-Optional fields so defaults apply) and `_coerce_relative_date()` (resolves `"now"`/`"today"`, `"-30d"`
+Gemini-style, `"N unit(s) ago"` Groq-style against `_dataset_reference_date()`; drops anything else rather
+than failing).
+
+**Not a bug — both free-tier keys are quota-exhausted from today's testing.** Direct calls (bypassing
+`complete_json`'s silent catch) surfaced real 429s: Groq's 100k daily-token quota is ~99,900+ used;
+Gemini's resolved model allows only 20 requests/day, also exhausted. `parsed_by: rules` is currently the
+*correct* fallback behavior on either provider until quota resets — verified both fixes by replaying the
+exact captured problematic LLM output through the real functions with the network call stubbed, since no
+live call could succeed at investigation time.
+
+4 new regression tests (3 in `test_intent.py`, 1 in `test_integration.py` asserting
+`response.model_dump_json()` succeeds — the exact call that used to crash).
+
+---
+
 ## Notes for whoever (human or agent) picks this file up
 
 - Don't reorder or renumber phases — TRACK_A_PROGRESS.md references them by number.
