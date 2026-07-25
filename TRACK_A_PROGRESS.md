@@ -6,7 +6,7 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-25, live LLM verification done — Known Gap #1 resolved.
+**Last updated:** 2026-07-25, precision/recall/FP validation table computed and added to README.
 
 ---
 
@@ -83,15 +83,41 @@ Verified against the live API (not just that it responds — that it's *correct*
 - Full round-trip through the **actual deployed HTTP API** (`uvicorn` + `curl`, not just Python calls):
   `/health` → `"llm_available": true`; a live messy query → correctly parsed via LLM, correct flag count.
 
-`pytest tests/ -v` → still 185/185 (tests stub `complete_json`, unaffected by the model name change).
+`pytest tests/ -v` → still 185/185 at this point (tests stub `complete_json`, unaffected by the model name
+change). Now **186/186** after the precision/recall test added below.
+
+### Precision/recall/FP validation (this update) — computed, not fabricated
+User asked for this after I'd flagged it as "arguably Track B's work" — did it as read-only analysis, no
+Track B files touched. Computed against the **synthetic dataset's** ground truth (`label_is_laundering`),
+not the raw IBM Kaggle set (that needs a Kaggle download not run here).
+
+**Methodology mattered more than the numbers**: first pass used "sender OR receiver of a labelled txn" as
+ground truth (114 customers) and got recall ≈ 0.22 — investigated *why* before reporting it, rather than
+just publishing the first number computed. Found 63 of those 114 are customers who only ever *receive*
+funds in a labelled pattern and never exhibit outbound behavior — our rules are entirely sender/outbound
+focused (per `AML_LOGIC.md`'s own rule definitions), so they correctly have nothing to flag them on. That
+ground truth was unfair to the system, not a system failure. Switched to sender-only ground truth (51
+customers) — the definition that actually matches what our rules evaluate — before reporting anything.
+
+**Reported in README.md's Results section**:
+| | Flagged | Precision | Recall | FPR |
+|---|---|---|---|---|
+| Naive baseline (any txn > $9,000) | 259/270 | 0.197 | 1.000 | 0.950 |
+| Our system, any flag | 30/270 | 0.767 | 0.451 | 0.032 |
+| Our system, HIGH only | 23/270 | 0.913 | 0.412 | 0.009 |
+
+Headline: **8.8× fewer customers flagged, ~30× lower false-positive rate**, at 41-45% recall depending on
+tier. The receiver-side gap (recall drops to ~22% under the broader ground truth) is documented as an
+honest limitation in README, not hidden — R2/fan-in detection is the natural next step, not built.
+
+Added `tests/test_false_positive_reduction_vs_naive_baseline` (`test_integration.py`) — protects the
+*headline claim* (≥5× fewer flags, ≥5× lower FPR, at least one true positive caught) without pinning exact
+percentages, which would be brittle to minor threshold retuning by Track B.
 
 ### Immediate next action
-No Track A phase work remains in the original 7-phase plan, and the LLM path is now verified. Open items,
-none blocking:
-- **Quantitative precision/recall/FP table** against the IBM label — flagged in README as "not yet done,"
-  arguably Track B's analytical work per WORKPLAN §6, not built here; ask before doing it.
-- Rehearsing the full demo script end-to-end 2-3 times before presenting (README's Setup section is the
-  closest thing to a script; no dedicated `DEMO_SCRIPT.md` from Track B seen yet as of this update).
+No Track A phase work remains in the original 7-phase plan, LLM path verified, FP-reduction table done.
+Only open item: rehearsing the full demo end-to-end 2-3 times before presenting (README's Setup/Usage
+sections are the closest thing to a script; no dedicated `DEMO_SCRIPT.md` from Track B seen yet).
 
 ---
 
@@ -129,6 +155,16 @@ none blocking:
       `requirements.txt`, wrote `README.md` + `ARCHITECTURE.md`. 6 new tests + 2 hardened with an
       explicit `force_mocks` fixture. Full suite 185/185, confirmed with a real `.env` present. Final live
       verification through the actual HTTP API, not just Python-level calls.
+- [x] **Post-Phase-7 — Live LLM verification.** Switched model from hardcoded `gemini-2.0-flash` (zero
+      free-tier quota on this account, discovered via a live 429) to the `gemini-flash-latest` alias.
+      Live-verified `complete_json`, `parse_intent`, `narrator._explain`, and the full HTTP API with a real
+      key — including 3 previously-broken slang queries now classifying correctly via the LLM.
+- [x] **Post-Phase-7 — Precision/recall/FP validation.** Computed against the synthetic dataset's
+      `label_is_laundering` ground truth (not the raw IBM set — no Kaggle download run here). Found the
+      first ground-truth definition (sender-or-receiver) was unfair to a sender-focused rule set before
+      reporting a number; switched to sender-only ground truth. Headline: 8.8× fewer customers flagged,
+      ~30× lower FPR than the naive baseline, at 41-45% recall. Added to README's Results section, plus
+      `test_false_positive_reduction_vs_naive_baseline` in `test_integration.py` to protect the claim.
 
 ---
 
@@ -369,7 +405,7 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
 1. Read this file top to bottom.
 2. Check `git log --oneline -5` to confirm nothing has changed since "Last updated" above — if it has,
    treat this file as stale until reconciled.
-3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 185/185-passing baseline still holds
+3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 186/186-passing baseline still holds
    before changing anything. If it's flaky or order-dependent, suspect either `backend/tools/base.py`'s
    global `TOOLS` dict (decision log #10) or ambient `.env`/`settings.aml_use_mocks` state leaking into
    tests that assume mock mode without forcing it (decision log #18) before assuming new test code is wrong.

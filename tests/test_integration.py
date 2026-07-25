@@ -177,3 +177,46 @@ def test_explain_flag_actually_scores_the_entity(real_tools):
     assert len(response.flags) == 1
     assert response.flags[0].entity_id == REAL_STRUCTURING_ENTITY
     assert response.flags[0].explanation in response.summary
+
+
+def test_false_positive_reduction_vs_naive_baseline(real_tools):
+    """README.md's Results section quantifies this against the synthetic
+    dataset's label_is_laundering ground truth: our system flags far fewer
+    customers than a naive 'any txn > $9,000' rule, at a far lower
+    false-positive rate. This test protects that headline claim without
+    pinning exact percentages (which would be brittle to minor threshold
+    tuning) — if this ever fails, the false-positive-reduction story in the
+    README is no longer true and needs re-validating, not just re-asserting.
+    """
+    import pandas as pd
+
+    intent = QueryIntent(raw_query="Analyse this dataset for suspicious activity",
+                          intent="full_analysis", parsed_by="rules", confidence=0.9)
+    plan = build_plan(intent)
+    response = run_plan(intent, plan)
+    our_flagged = {f.entity_id for f in response.flags}
+
+    df = pd.read_csv("data/sample/aml_sample.csv")
+    cust = pd.read_csv("data/sample/aml_sample_customers.csv")
+    all_customers = set(cust["customer_id"])
+    positives = set(df[df.label_is_laundering == True]["sender_id"]) & all_customers
+    negatives = all_customers - positives
+    naive_flagged = set(df[df.amount > 9000]["sender_id"].unique()) & all_customers
+
+    def false_positive_rate(flagged):
+        fp = len(flagged & negatives)
+        tn = len(negatives - flagged)
+        return fp / (fp + tn) if (fp + tn) else 0.0
+
+    naive_fpr = false_positive_rate(naive_flagged)
+    our_fpr = false_positive_rate(our_flagged)
+
+    assert len(our_flagged) < len(naive_flagged) / 5, (
+        f"our system flagged {len(our_flagged)}, naive flagged {len(naive_flagged)} — "
+        "expected at least a 5x reduction in flagged customers"
+    )
+    assert our_fpr < naive_fpr / 5, (
+        f"our FPR {our_fpr:.3f} vs naive FPR {naive_fpr:.3f} — expected at least a 5x FPR reduction"
+    )
+    # sanity: we shouldn't be achieving low FPR by simply not flagging anyone
+    assert len(our_flagged & positives) > 0, "our system caught zero true positives"

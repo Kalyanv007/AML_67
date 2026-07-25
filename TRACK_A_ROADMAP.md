@@ -370,6 +370,42 @@ present on disk (not just in a clean environment with no `.env`).
 
 ---
 
+## Standalone fix — Live LLM verification ✅ DONE
+
+User obtained a Gemini key. `gemini-2.0-flash` (hardcoded at the time) failed live with
+`429 RESOURCE_EXHAUSTED, limit: 0` — a hard zero quota on this account, not exhaustion. Investigated via
+`genai.list_models()` rather than guessing more names; switched to `gemini-flash-latest`, an alias Google
+maintains to always point at the current recommended flash model, chosen specifically so a future model
+retirement doesn't require another code change. Verified `complete_json`, `parse_intent` (including its
+safe fallback when the LLM returns non-ISO date shorthand), `narrator._explain`, and the full HTTP API
+live. Concrete payoff: 3 previously-broken slang queries now classify correctly via the LLM. Full suite
+unaffected (185/185) — tests correctly never depend on a live key.
+
+---
+
+## Standalone task — Precision/Recall/False-Positive Validation ✅ DONE
+
+Computed against the synthetic dataset's `label_is_laundering` ground truth (202/2,002 transactions;
+raw IBM Kaggle set not used — no download run in this environment). First ground-truth definition tried
+(sender-or-receiver of a labelled transaction) produced a misleadingly low recall (~22%) — investigated
+why before reporting it, found 63 of those "positives" are customers who only ever *receive* funds in a
+labelled pattern with no outbound behavior of their own, which a sender-focused rule set has no signal to
+catch on. Switched to sender-only ground truth (matches what the rules actually evaluate) before writing
+anything down. Result, added to README.md's Results section:
+
+| | Flagged | Precision | Recall | FPR |
+|---|---|---|---|---|
+| Naive baseline (any txn > $9,000) | 259/270 | 0.197 | 1.000 | 0.950 |
+| Our system, any flag | 30/270 | 0.767 | 0.451 | 0.032 |
+| Our system, HIGH only | 23/270 | 0.913 | 0.412 | 0.009 |
+
+8.8× fewer customers flagged, ~30× lower false-positive rate than the naive baseline. The receiver-side
+recall gap is documented as an honest limitation, not hidden. `test_false_positive_reduction_vs_naive_baseline`
+in `tests/test_integration.py` protects the headline claim (≥5× fewer flags, ≥5× lower FPR) without
+pinning exact percentages that would be brittle to future threshold tuning.
+
+---
+
 ## Notes for whoever (human or agent) picks this file up
 
 - Don't reorder or renumber phases — TRACK_A_PROGRESS.md references them by number.
