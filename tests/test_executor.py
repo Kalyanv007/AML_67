@@ -18,6 +18,16 @@ def force_mocks(monkeypatch):
     executor_mod._TOOLS_CACHE = None
 
 
+@pytest.fixture(autouse=True)
+def no_llm(monkeypatch):
+    """The mock risk_classify fixture (C-04521) is HIGH risk, which triggers
+    narrator._explain()'s LLM polish path. Without this, every test in this
+    file silently made a REAL network call to whatever provider/key was live
+    in .env — discovered after burning through a day's free-tier quota partly
+    from repeated full-suite test runs, not just manual query testing."""
+    monkeypatch.setattr("backend.agent.narrator.complete_json", lambda *a, **kw: None)
+
+
 def _full_analysis_intent() -> QueryIntent:
     return QueryIntent(raw_query="analyse this dataset", intent="full_analysis", parsed_by="rules", confidence=0.9)
 

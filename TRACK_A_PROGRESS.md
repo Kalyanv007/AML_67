@@ -6,8 +6,8 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-26, fixed 2 real bugs found from user-reported live symptoms (numpy JSON
-serialization crash on full_analysis; LLM-result field validation causing false fallback-to-rules).
+**Last updated:** 2026-07-26, added Ollama as a 4th LLM provider + response caching, and fixed a real
+test-isolation bug that was likely the dominant cause of today's quota exhaustion.
 
 ---
 
@@ -200,12 +200,54 @@ and `tests/test_integration.py` (1 new: asserts `response.model_dump_json()` suc
 
 `pytest tests/ -v` → **190/190 passing, confirmed** (186 + these 4 new regression tests).
 
+### Ollama (4th provider) + response caching + a bigger test-isolation fix (this update)
+User's laptop (16GB+ RAM, RTX 3050 6GB) and teammate's (MacBook Air M3) can both run a local LLM, removing
+the quota problem entirely for dev/testing. Added as a 4th provider, same pattern as Gemini/OpenAI/Groq.
+
+**`backend/config.py`**: `ollama_base_url` (default `http://localhost:11434`), `ollama_model` (default
+`qwen2.5:7b-instruct`) — no API key field, local + unauthenticated.
+
+**`backend/llm/client.py`**: `_complete_ollama()` uses Ollama's *native* `/api/chat` endpoint (not the
+OpenAI-compat layer) — `format: "json"` is Ollama's own stable JSON-mode flag, simpler than routing
+through a compatibility shim. Uses `requests` (already a dependency, no new package). Also added a
+**success-only response cache** (`_CACHE` dict, not a plain `@lru_cache`) keyed on `(prompt, schema_hint)`
+— deliberately does NOT cache `None`/failures, since today's actual failures were transient rate-limits
+that clear up later; a bare `lru_cache` would have permanently poisoned every failed query for the rest of
+the process. This directly addresses "quota exhausted within a few queries" — repeating the same query
+during rehearsal now costs nothing after the first success, on any provider.
+
+**Found a bigger bug while verifying the cache**: `tests/test_executor.py`, `test_api.py`, and
+`test_integration.py` **never mocked `complete_json` at all** — every single `pytest tests/` run this
+entire session was silently making real LLM calls to whatever key was live in `.env`.
+`test_integration.py`'s real-data tests are the worst offender: several produce 20-30 HIGH-risk flags per
+test, each triggering a separate real LLM call (narrator's HIGH-only cap doesn't help here — it still
+calls once per HIGH flag, just not once per flag of any level). Given the full suite was run many times
+today, **this was very likely the dominant cause of both quota exhaustions — larger than manual query
+testing.** Fixed by adding a `no_llm` autouse fixture (patches `narrator.complete_json` to return `None`)
+to all three files, costing zero test coverage (none of them assert on LLM-polished wording).
+
+New `tests/test_llm_client.py` (5 tests): Ollama branch calls the right endpoint/payload and parses the
+response; no API-key gate needed; successful completions are cached; **failed completions are explicitly
+NOT cached** (the exact bug a plain `lru_cache` would introduce — verified a retry after a simulated
+transient failure actually hits the provider again, not a poisoned cache entry); different queries cache
+independently.
+
+New `OLLAMA_SETUP_MAC.md` — hand-off doc for the teammate, Mac-specific (brew install, check unified
+memory first, model choice scales with it: `qwen2.5:14b-instruct` if 16GB+ since M3's unified memory can
+fit what a 6GB discrete GPU can't, `qwen2.5:7b-instruct` if 8GB). Honest note included: Metal is typically
+a bit slower per-token than CUDA at the *same* model size — the M3's edge is capacity, not speed.
+
+`pytest tests/ -v` → **195 passed, 3 skipped, confirmed** (190 + 5 new `test_llm_client.py` tests). The 3
+skips are pre-existing (Track B's, not introduced here) — investigate if picked up later and this note
+looks stale.
+
 ### Immediate next action
-No Track A phase work remains in the original 7-phase plan. Three LLM providers wired; Gemini and Groq
-each individually live-verified at least once (both now quota-exhausted for today — re-verify live once a
-quota resets, though the stubbed-replay verification above is solid evidence the fix itself is correct).
-Only open item: rehearsing the full demo end-to-end 2-3 times before presenting (README's Setup/Usage
-sections are the closest thing to a script; no dedicated `DEMO_SCRIPT.md` from Track B seen yet).
+No Track A phase work remains in the original 7-phase plan. Four LLM providers wired now (Gemini, Groq,
+Ollama all individually live/stub-verified; OpenAI has code but has never been tested by anyone on this
+project). Gemini and Groq are quota-exhausted for today but the test-isolation fix means that won't recur
+from testing itself going forward. Only open item: rehearsing the full demo end-to-end 2-3 times before
+presenting (README's Setup/Usage sections are the closest thing to a script; no dedicated `DEMO_SCRIPT.md`
+from Track B seen yet).
 
 ---
 

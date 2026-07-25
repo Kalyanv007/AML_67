@@ -461,6 +461,35 @@ live call could succeed at investigation time.
 
 ---
 
+## Standalone task — Ollama (4th LLM provider) + response caching ✅ DONE
+
+Both cloud keys (Gemini, Groq) hit their quota during this session's testing. User's laptop (RTX 3050 6GB)
+and teammate's (MacBook Air M3) can both run a local model — added Ollama as a 4th provider, same pattern
+as the other three: `backend/config.py` gets `ollama_base_url`/`ollama_model` (no key field, local +
+unauthenticated); `backend/llm/client.py` gets `_complete_ollama()` using Ollama's native `/api/chat`
+endpoint (`format: "json"`, not the OpenAI-compat layer — simpler, no new dependency since `requests` is
+already installed).
+
+Also added a **success-only** response cache to `complete_json()` — keyed on `(prompt, schema_hint)`,
+deliberately not a plain `@lru_cache` since that would permanently cache a transient rate-limit failure as
+`None` forever for that exact query. This directly targets "quota exhausted within a few queries."
+
+**The bigger find**: while verifying the cache, discovered `test_executor.py`, `test_api.py`, and
+`test_integration.py` never mocked `complete_json` at all — every full-suite run all session was making
+real LLM calls, with `test_integration.py`'s real-data tests (20-30 HIGH flags per test) as the worst
+offender. This was very likely the dominant cause of today's quota exhaustion, more than manual testing.
+Fixed with a `no_llm` autouse fixture in all three files — zero coverage lost, since none assert on
+LLM-polished wording.
+
+New `tests/test_llm_client.py` (5 tests) and `OLLAMA_SETUP_MAC.md` (Mac-specific hand-off doc for the
+teammate — model choice scales with their unified memory, with an honest note that Metal is typically
+slower per-token than CUDA at the same model size, but Apple's unified memory can fit bigger models a 6GB
+discrete GPU physically can't).
+
+`pytest tests/ -v` → 195 passed, 3 skipped (190 + 5 new; the 3 skips are pre-existing, not from this work).
+
+---
+
 ## Notes for whoever (human or agent) picks this file up
 
 - Don't reorder or renumber phases — TRACK_A_PROGRESS.md references them by number.

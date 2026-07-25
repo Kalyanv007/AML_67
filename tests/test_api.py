@@ -21,6 +21,14 @@ def force_mocks(monkeypatch):
     executor_mod._TOOLS_CACHE = None
 
 
+@pytest.fixture(autouse=True)
+def no_llm(monkeypatch):
+    """The mock risk_classify fixture (C-04521) is HIGH risk, triggering
+    narrator._explain()'s LLM polish path via the real /query endpoint —
+    without this, every test here silently made a real network call."""
+    monkeypatch.setattr("backend.agent.narrator.complete_json", lambda *a, **kw: None)
+
+
 def test_health():
     r = client.get("/health")
     assert r.status_code == 200

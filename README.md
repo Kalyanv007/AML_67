@@ -131,10 +131,10 @@ The two-person parallel build plan (for context on how this repo came together):
 |---|---|
 | Backend | FastAPI + uvicorn, Pydantic v2 |
 | Agent core | Python — intent parser, planner, executor, narrator (no agent framework; the plan/execute/re-plan loop is hand-rolled and fully inspectable) |
-| LLM | Gemini or OpenAI (configurable), behind one adapter, always with a regex fallback |
+| LLM | Gemini, OpenAI, Groq, or **Ollama (local, no key/quota)** — one adapter, always with a regex fallback |
 | Data / detection | pandas, numpy, scikit-learn (IsolationForest, LOF), networkx (layering chains) |
 | Frontend | Streamlit + Plotly |
-| Tests | pytest — 185 tests |
+| Tests | pytest — 190+ tests |
 
 ## Datasets
 
@@ -170,11 +170,17 @@ pipeline over that sample data; without an LLM key, intent parsing and explanati
 always-available regex/template fallback, not a degraded mode.
 
 **To use a real LLM** (optional, improves messy/informal query phrasing and polishes HIGH-risk
-explanations): set `LLM_PROVIDER` and the matching key in `.env`. Free-tier rate limits are respected by
-design — LLM calls happen at most once per query for intent parsing, and explanation polishing is capped
-to `HIGH`-risk flags only (a `full_analysis` query can produce dozens of flags; polishing all of them
-would exhaust a free-tier quota on a single request for no benefit, since the template text is already
-accurate).
+explanations): set `LLM_PROVIDER` and the matching key in `.env` (`gemini`, `openai`, or `groq`). Free-tier
+rate limits are respected by design — LLM calls happen at most once per query for intent parsing (and are
+response-cached, so re-running the same query during a demo costs nothing further), and explanation
+polishing is capped to `HIGH`-risk flags only (a `full_analysis` query can produce dozens of flags;
+polishing all of them would exhaust a free-tier quota on a single request for no benefit, since the
+template text is already accurate).
+
+**To use a local LLM instead (no key, no quota at all)**: set `LLM_PROVIDER=ollama` after installing
+[Ollama](https://ollama.com/download) and pulling a model (`ollama pull qwen2.5:7b-instruct`). See
+[OLLAMA_SETUP_MAC.md](OLLAMA_SETUP_MAC.md) for Mac-specific setup; the same `LLM_PROVIDER=ollama` works
+identically on Windows/Linux once Ollama is installed there.
 
 **To download the real IBM Kaggle dataset instead of the synthetic one**, `kaggle`/`kagglehub` credentials
 are required — see [DATA_CARD.md](DATA_CARD.md) §1.1.
@@ -256,12 +262,14 @@ generator doesn't inject cohorts for those two patterns, so they're implemented 
 
 ## Limitations
 
-- **LLM path is provider-agnostic and always has a working fallback**; live-verified against a real Gemini
-  key (`gemini-flash-latest`) — correctly classifies messy/slang phrasing the regex fallback alone gets
-  wrong (e.g. "who r my 3 sketchiest customers rn" → `ranking`, `top_n=3`). One nuance: the LLM returns
-  relative-date shorthand rather than ISO dates for phrases like "last 30 days," which fails schema
-  validation and safely falls back to the regex parser — so date-filter accuracy currently comes from the
-  regex path regardless of which parser handled the rest of the query.
+- **LLM path is provider-agnostic (Gemini, OpenAI, Groq, or local Ollama) and always has a working
+  fallback**; live-verified against real Gemini and Groq keys — correctly classifies messy/slang phrasing
+  the regex fallback alone gets wrong (e.g. "who r my 3 sketchiest customers rn" → `ranking`, `top_n=3`).
+  LLM providers often return relative-date shorthand ("-30d", "1 month ago") instead of ISO dates for
+  phrases like "last 30 days" — `intent_parser._coerce_relative_date()` resolves these against the
+  dataset's own reference date rather than failing validation. Free-tier cloud quotas are small enough
+  that repeated identical testing can exhaust them in one session — `complete_json()` caches successful
+  completions (not failures) to avoid burning quota on repeat queries during rehearsal.
 - **Entity-ID matching is numeric-only.** The real dataset's customer IDs follow the generator's own
   scheme (`C-N0001`, `C-STR02`, `C-HUB01`) rather than plain numbers. A query like "customer 2" resolves
   by matching digits against real IDs (picking the first match on ambiguity, which does occur — multiple

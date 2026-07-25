@@ -30,6 +30,19 @@ def real_tools(monkeypatch):
     executor_mod._TOOLS_CACHE = None
 
 
+@pytest.fixture(autouse=True)
+def no_llm(monkeypatch):
+    """full_analysis-style tests here run against real data and can produce
+    dozens of HIGH-risk flags, each of which triggers narrator._explain()'s
+    LLM polish path — without this, every run of this file silently made
+    dozens of REAL network calls to whatever provider/key was live in .env.
+    None of these tests assert on LLM-polished wording (only counts, tool
+    sequences, entity scoping, risk scores), so forcing template-only mode
+    costs zero coverage while eliminating what was likely the single largest
+    contributor to today's free-tier quota exhaustion."""
+    monkeypatch.setattr("backend.agent.narrator.complete_json", lambda *a, **kw: None)
+
+
 def test_full_analysis_against_real_tools(real_tools):
     intent = QueryIntent(raw_query="Analyse this dataset for suspicious activity",
                           intent="full_analysis", parsed_by="rules", confidence=0.9)
