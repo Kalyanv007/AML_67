@@ -96,6 +96,18 @@ def run_plan(intent: QueryIntent, plan: ExecutionPlan) -> AgentResponse:
         i += 1
 
     risk_rows = ctx.artifacts.get("risk_rows", [])
+
+    if intent.intent in ("entity_investigation", "explain_flag") and intent.entities:
+        # filter_data has no per-entity dimension (see planner.py), so risk_classify
+        # scores the whole population — narrow to the requested entity/entities here.
+        wanted = set(intent.entities)
+        risk_rows = [r for r in risk_rows if r.get("entity_id") in wanted]
+
+    if intent.intent == "ranking":
+        # risk_classify has no top_n param (see planner.py) — rows arrive pre-sorted
+        # descending by risk_score (backend/tools/risk.py), so a plain slice is correct.
+        risk_rows = risk_rows[: intent.top_n]
+
     response.flags = build_flags(risk_rows)
     if not response.summary:
         response.summary = _summarise(intent, response)
@@ -112,7 +124,7 @@ def _summarise(intent: QueryIntent, response: AgentResponse) -> str:
             return f"{entity} is flagged {f.risk_level} risk (score {f.risk_score:.0f}) — recommended action: {f.escalation}."
         return f"{entity} shows no flagged risk indicators in the current data."
     if intent.intent == "threshold_query":
-        count = response.metrics.get("matching_customers", n)
+        count = response.metrics.get("row_count", n)
         return f"{count} customer(s) matched the specified threshold."
     if n:
         return f"{n} entity(ies) flagged for review across the analysed data."

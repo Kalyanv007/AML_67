@@ -109,7 +109,7 @@ def ml_detect(ctx: ToolContext, **kw) -> ToolResult:
 def aggregate_query(ctx: ToolContext, **kw) -> ToolResult:
     return ToolResult(
         tables={"aggregate_result": [{"customer_id": "C-04521", "txn_count": 3, "under_threshold": True}]},
-        metrics={"matching_customers": 1},
+        metrics={"row_count": 1},
     )
 
 

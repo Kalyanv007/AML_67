@@ -32,7 +32,7 @@ ESCALATION_BY_LEVEL: dict[RiskLevel, Escalation] = {
 def build_flags(risk_rows: list[dict[str, Any]]) -> list[Flag]:
     flags: list[Flag] = []
     for row in risk_rows:
-        evidence = [e if isinstance(e, Evidence) else Evidence(**e) for e in row.get("evidence", [])]
+        evidence = _build_evidence(row)
         explanation = _explain(row, evidence)
         risk_level: RiskLevel = row["risk_level"]
         escalation: Escalation = row.get("escalation") or ESCALATION_BY_LEVEL[risk_level]
@@ -54,6 +54,53 @@ def build_flags(risk_rows: list[dict[str, Any]]) -> list[Flag]:
     return flags
 
 
+def _build_evidence(row: dict[str, Any]) -> list[Evidence]:
+    """Adapt risk_classify's raw per-rule evidence into the frozen Evidence shape.
+
+    rule_detect's evidence dicts are rule-specific (structuring's fields differ
+    from layering's, etc.) — Contract 2 documents them as free-form, only
+    Contract 1's Evidence model is fixed. risk_classify pairs `evidence[i]`
+    positionally with `triggered_rules[i]` (see backend/tools/risk.py), so we
+    use that pairing to synthesize a valid Evidence per hit. Already-conformant
+    Evidence dicts (e.g. from the mock tools) pass through unchanged.
+    """
+    raw_list = row.get("evidence", [])
+    rule_ids = row.get("triggered_rules", [])
+    items: list[Evidence] = []
+
+    for i, raw in enumerate(raw_list):
+        if isinstance(raw, Evidence):
+            items.append(raw)
+            continue
+        try:
+            items.append(Evidence(**raw))
+            continue
+        except Exception:
+            pass
+
+        raw = raw if isinstance(raw, dict) else {}
+        rule_id = rule_ids[i] if i < len(rule_ids) else None
+        label = RULE_NAMES.get(rule_id, rule_id or "Rule")
+        formatted = _format_raw_evidence(raw)
+        note = f"{label} — {formatted}" if formatted else f"{label} triggered."
+        items.append(Evidence(rule_id=rule_id, feature=None, value=formatted or (rule_id or "n/a"),
+                               threshold=None, note=note))
+    return items
+
+
+def _format_raw_evidence(raw: dict[str, Any]) -> str:
+    parts = []
+    for k, v in raw.items():
+        if isinstance(v, float):
+            v_str = f"{v:.1%}" if 0 <= v <= 1 else f"{v:,.2f}"
+        elif isinstance(v, list):
+            v_str = ", ".join(str(x) for x in v[:5])
+        else:
+            v_str = str(v)
+        parts.append(f"{k.replace('_', ' ')}={v_str}")
+    return "; ".join(parts)
+
+
 def _explain(row: dict[str, Any], evidence: list[Evidence]) -> str:
     parts: list[str] = []
     for rule_id in row.get("triggered_rules", []):
@@ -64,9 +111,11 @@ def _explain(row: dict[str, Any], evidence: list[Evidence]) -> str:
             parts.append(f"{RULE_NAMES.get(rule_id, rule_id)} rule triggered.")
 
     if not parts and row.get("ml_score") is not None:
+        feats = row.get("ml_top_features") or []
+        feat_txt = f" Top contributing features: {', '.join(feats)}." if feats else ""
         parts.append(
             f"Flagged by anomaly detection (percentile {row['ml_score']:.0%}) — no single rule matched, "
-            "but the transaction pattern deviates significantly from this entity's baseline."
+            f"but the transaction pattern deviates significantly from this entity's baseline.{feat_txt}"
         )
     if not parts:
         parts.append("Flagged for review based on the query's risk criteria.")

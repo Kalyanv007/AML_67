@@ -231,9 +231,51 @@ exit criterion that Phase 0 originally deferred.
 
 ---
 
-## Phase 6 — Integrate Track B's real tools
+## Phase 6 — Integrate Track B's real tools ✅ DONE
 
-Goal: flip `AML_USE_MOCKS=0`, same pipeline, real data and detection.
+Found and fixed 5 real issues, all in files Track A owns — none required touching Track B's tool files:
+
+1. **`narrator.py` crash**: `risk_classify`'s real `evidence` field is a list of *rule-specific* raw dicts
+   (structuring's fields differ from layering's), not the fixed `Evidence` shape — documented in Track B's
+   own `risk.py` comment. Added `_build_evidence()`: passes through already-conformant dicts (mocks),
+   synthesizes a valid `Evidence` from raw dicts otherwise, pairing `evidence[i]` with `triggered_rules[i]`
+   positionally (matches how `risk.py` builds them).
+2. **`planner.py` param-name mismatches, all silent (no crash, just no-ops)**: `filter_data` was called
+   with a single nested `filters={...}` dict; the real tool takes flattened kwargs
+   (`date_from`, `amount_max`, etc. — mirrors `schemas.Filters` field-for-field). `feature_engineer` was
+   called with `patterns=`; the real tool's param is `pattern_types=`. `aggregate_query` was called with
+   invented `min_txn_count=`/`amount_max=` kwargs that don't exist on the real tool at all (its real
+   signature is `group_by`/`agg_col`/`agg_func`/`threshold`/`top_n`) — `threshold_query` was silently
+   non-functional against real data. Added `_filter_kwargs()` helper; rewrote the `threshold_query` and
+   pattern-scoping calls to match the real signatures.
+3. **`executor.py` missing scoping logic**: `filter_data` has no per-entity dimension, so
+   `entity_investigation` queries were returning risk rows for *every* entity, not just the one asked
+   about; `risk_classify` has no `top_n`, so `ranking` queries returned the whole population. Added
+   post-`risk_classify` filtering (`entity_investigation`/`explain_flag` → filter to `intent.entities`;
+   `ranking` → slice to `intent.top_n`, rows already arrive sorted descending).
+4. **`executor.py` metric key**: `_summarise()` read `metrics["matching_customers"]`; the real
+   `aggregate_query` emits `metrics["row_count"]`. Fixed, and renamed the mock's key to match for
+   consistency.
+5. **`registry.py` — a real bug, not a test artifact**: `TOOLS` is a global dict; a module's `@tool`
+   decorator only runs on its *first* import. Calling `load_tools()` more than once with different
+   `use_mocks` values in the same process (which happens across a pytest session, not in a normal
+   single-mode server run) left stale entries — whichever module registered a name *last*, in whatever
+   mode that happened to be, won, regardless of the mode requested on a later call. Fixed by clearing
+   `TOOLS` and `importlib.reload()`-ing already-imported modules on every `load_tools()` call, so each
+   call is deterministic in its requested mode regardless of call history. Found via a full-suite test
+   failure that only reproduced in specific file combinations — root-caused by bisecting file
+   combinations, not guessed at.
+
+**Manually verified against the real 2,002-row sample dataset** (not just pytest) for all 5 of
+WORKPLAN.md's plan-divergence-relevant queries — `full_analysis` (30 flags across HIGH/MEDIUM/LOW),
+`pattern_search` structuring (16 flags, only R1/9 features evaluated, not all 6/18), `threshold_query`
+(16 qualifying customers, correct `ml_detect` exclusion), `entity_investigation` against both a real ID
+(`C-STR02` — 1 correctly-scoped flag) and a nonexistent one (`C-04521`, the mock-only ID — 0 flags,
+graceful, not a crash), and `ranking` top-5 (exactly 5, correctly sorted). `tests/test_integration.py`
+(7 tests) locks all of this in. Full suite: **175/175 passing**, confirmed stable across three different
+file orderings (the registry bug was order-sensitive, so this mattered).
+
+Goal (reference, already met): flip `AML_USE_MOCKS=0`, same pipeline, real data and detection.
 
 - Nothing in `backend/agent/**` should need to change — if it does, the mismatch is almost always because
   a Track B tool's `artifacts` shape drifted from Contract 2's agreed keys table. Fix the tool to match the
