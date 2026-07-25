@@ -1,0 +1,271 @@
+customer_id,name,account_open_date,customer_type,country,occupation,risk_rating,kyc_status,is_pep,expected_monthly_volume
+C-N0001,Alice Smith,2018-02-15,individual,JP,retail worker,low,verified,False,10477.45
+C-N0002,Bob Smith,2020-01-14,business,US,corporate banking,medium,verified,False,18752.52
+C-N0003,Carol Smith,2020-08-27,individual,CA,doctor,low,verified,False,13014.93
+C-N0004,David Smith,2020-12-01,individual,FR,contractor,low,verified,False,17607.5
+C-N0005,Eva Smith,2017-02-06,individual,US,nurse,medium,verified,False,16444.64
+C-N0006,Frank Smith,2015-09-28,business,CA,corporate banking,medium,verified,False,14853.18
+C-N0007,Grace Smith,2020-07-06,individual,DE,software engineer,low,verified,False,16987.69
+C-N0008,Hank Smith,2019-01-11,business,US,corporate banking,low,verified,False,9746.92
+C-N0009,Irene Smith,2017-05-02,individual,US,software engineer,medium,verified,False,17011.91
+C-N0010,Jack Smith,2015-03-26,individual,JP,accountant,low,verified,False,22616.43
+C-N0011,Karen Smith,2018-04-09,individual,JP,student,low,verified,False,20637.23
+C-N0012,Leo Smith,2017-09-07,individual,US,software engineer,low,verified,False,8929.16
+C-N0013,Maria Smith,2020-10-15,individual,GB,teacher,low,verified,False,8264.03
+C-N0014,Nathan Smith,2017-10-29,individual,US,software engineer,low,verified,False,13486.64
+C-N0015,Olivia Smith,2021-07-02,business,GB,corporate banking,low,verified,False,23580.46
+C-N0016,Paul Smith,2019-04-24,individual,DE,accountant,low,verified,False,20762.93
+C-N0017,Quinn Smith,2016-07-22,individual,CA,student,low,verified,False,22177.3
+C-N0018,Rachel Smith,2021-07-11,individual,SG,doctor,low,verified,False,13316.47
+C-N0019,Sam Smith,2015-07-03,individual,AU,retail worker,high,verified,False,11449.99
+C-N0020,Tina Smith,2021-02-03,business,GB,corporate banking,low,verified,False,6317.63
+C-N0021,Uma Smith,2021-02-21,individual,FR,contractor,low,verified,False,10653.0
+C-N0022,Victor Smith,2017-09-30,individual,US,doctor,low,verified,False,21001.97
+C-N0023,Wendy Smith,2021-08-11,individual,CA,accountant,low,verified,False,11722.04
+C-N0024,Xavier Smith,2019-11-15,individual,GB,accountant,low,verified,False,22258.38
+C-N0025,Yara Smith,2019-12-31,individual,GB,lawyer,low,verified,False,21382.5
+C-N0026,Zack Smith,2015-12-15,individual,AU,retail worker,low,verified,False,1034.42
+C-N0027,Amber Smith,2018-09-12,individual,FR,nurse,low,pending,False,37640.49
+C-N0028,Brian Smith,2015-03-16,individual,FR,software engineer,low,verified,False,18751.86
+C-N0029,Clara Smith,2015-10-08,individual,AU,accountant,low,pending,False,20946.57
+C-N0030,Derek Smith,2018-02-11,individual,US,student,high,verified,False,25191.27
+C-N0031,Alice Johnson,2018-08-10,individual,FR,retail worker,low,verified,False,43441.16
+C-N0032,Bob Johnson,2021-07-11,business,FR,corporate banking,low,verified,False,10525.85
+C-N0033,Carol Johnson,2019-07-15,individual,DE,software engineer,low,verified,False,20953.34
+C-N0034,David Johnson,2016-01-27,individual,DE,retail worker,high,verified,False,13269.87
+C-N0035,Eva Johnson,2022-03-22,individual,DE,lawyer,low,pending,False,26987.33
+C-N0036,Frank Johnson,2016-01-11,individual,DE,nurse,high,verified,False,32369.08
+C-N0037,Grace Johnson,2022-04-27,individual,SG,doctor,low,verified,False,24894.66
+C-N0038,Hank Johnson,2018-03-29,business,DE,corporate banking,low,verified,False,13885.49
+C-N0039,Irene Johnson,2019-05-21,individual,AU,lawyer,low,verified,False,14893.72
+C-N0040,Jack Johnson,2015-10-14,individual,AU,nurse,medium,verified,False,35545.69
+C-N0041,Karen Johnson,2020-03-30,individual,AU,accountant,medium,verified,False,21792.9
+C-N0042,Leo Johnson,2019-08-13,individual,CA,consultant,low,verified,False,22307.04
+C-N0043,Maria Johnson,2020-02-05,individual,FR,teacher,low,verified,False,25739.64
+C-N0044,Nathan Johnson,2016-10-15,individual,DE,lawyer,low,verified,False,25823.07
+C-N0045,Olivia Johnson,2022-11-12,individual,GB,contractor,low,verified,True,14667.78
+C-N0046,Paul Johnson,2015-10-12,individual,AU,consultant,low,verified,False,12360.16
+C-N0047,Quinn Johnson,2021-05-01,individual,JP,teacher,low,verified,False,14936.16
+C-N0048,Rachel Johnson,2015-05-10,individual,DE,accountant,low,verified,False,34913.02
+C-N0049,Sam Johnson,2015-08-15,individual,JP,software engineer,low,pending,False,12010.57
+C-N0050,Tina Johnson,2015-08-09,individual,CA,lawyer,low,verified,False,7998.71
+C-N0051,Uma Johnson,2016-08-10,individual,US,teacher,low,verified,False,23456.99
+C-N0052,Victor Johnson,2016-12-20,individual,DE,doctor,medium,verified,False,33274.65
+C-N0053,Wendy Johnson,2022-01-12,individual,AU,teacher,low,verified,False,16988.0
+C-N0054,Xavier Johnson,2016-05-27,individual,FR,lawyer,low,verified,False,32349.39
+C-N0055,Yara Johnson,2019-03-13,individual,JP,contractor,low,verified,False,28579.79
+C-N0056,Zack Johnson,2018-08-24,individual,FR,retail worker,low,pending,False,6473.49
+C-N0057,Amber Johnson,2019-04-13,individual,FR,nurse,low,verified,False,18745.95
+C-N0058,Brian Johnson,2016-08-14,business,JP,corporate banking,low,verified,False,24129.86
+C-N0059,Clara Johnson,2017-06-15,business,FR,corporate banking,low,verified,False,23283.82
+C-N0060,Derek Johnson,2019-04-18,individual,US,teacher,low,verified,False,43531.24
+C-N0061,Alice Williams,2021-12-22,individual,CA,software engineer,low,verified,False,15361.54
+C-N0062,Bob Williams,2019-02-07,individual,CA,retail worker,low,verified,False,13996.67
+C-N0063,Carol Williams,2020-07-07,individual,FR,accountant,low,verified,False,15707.75
+C-N0064,David Williams,2018-12-03,individual,JP,teacher,low,verified,False,31273.95
+C-N0065,Eva Williams,2020-07-04,business,DE,corporate banking,low,verified,False,19086.62
+C-N0066,Frank Williams,2016-10-30,business,GB,corporate banking,medium,verified,False,18902.62
+C-N0067,Grace Williams,2022-08-14,individual,SG,nurse,low,verified,False,8289.1
+C-N0068,Hank Williams,2019-06-03,individual,US,lawyer,low,verified,False,16367.35
+C-N0069,Irene Williams,2019-05-25,individual,JP,consultant,low,verified,False,22126.24
+C-N0070,Jack Williams,2022-11-02,individual,DE,nurse,low,verified,False,34786.04
+C-N0071,Karen Williams,2018-02-04,business,SG,corporate banking,low,verified,False,4144.71
+C-N0072,Leo Williams,2019-08-02,business,SG,corporate banking,low,verified,False,3822.95
+C-N0073,Maria Williams,2020-09-22,business,FR,corporate banking,medium,verified,False,17613.09
+C-N0074,Nathan Williams,2021-12-29,individual,SG,teacher,low,verified,False,11009.57
+C-N0075,Olivia Williams,2022-06-06,individual,US,accountant,low,verified,False,29753.36
+C-N0076,Paul Williams,2019-01-21,individual,JP,teacher,low,verified,False,21450.54
+C-N0077,Quinn Williams,2020-09-21,individual,SG,retail worker,high,pending,False,32635.78
+C-N0078,Rachel Williams,2016-08-19,individual,AU,retail worker,low,verified,False,6276.65
+C-N0079,Sam Williams,2017-05-08,individual,FR,contractor,low,verified,False,35896.06
+C-N0080,Tina Williams,2019-03-30,individual,GB,nurse,low,pending,False,9350.14
+C-N0081,Uma Williams,2015-12-22,individual,JP,retail worker,low,verified,False,12347.21
+C-N0082,Victor Williams,2021-10-12,individual,AU,nurse,low,verified,False,11343.54
+C-N0083,Wendy Williams,2019-01-01,individual,DE,software engineer,low,verified,False,22969.98
+C-N0084,Xavier Williams,2019-06-26,individual,FR,retail worker,medium,verified,False,11465.68
+C-N0085,Yara Williams,2022-03-17,individual,GB,teacher,low,incomplete,False,15009.56
+C-N0086,Zack Williams,2022-07-09,individual,SG,accountant,high,verified,False,15765.97
+C-N0087,Amber Williams,2021-02-17,individual,DE,student,high,verified,False,17228.71
+C-N0088,Brian Williams,2017-10-17,individual,JP,accountant,medium,verified,False,16126.21
+C-N0089,Clara Williams,2018-06-10,individual,FR,lawyer,low,pending,False,33634.16
+C-N0090,Derek Williams,2020-08-21,individual,GB,lawyer,medium,verified,False,17581.94
+C-N0091,Alice Brown,2020-10-17,individual,JP,lawyer,low,pending,False,22591.79
+C-N0092,Bob Brown,2015-04-06,business,JP,corporate banking,low,verified,False,30399.18
+C-N0093,Carol Brown,2017-11-29,business,US,corporate banking,medium,verified,False,14060.59
+C-N0094,David Brown,2018-11-23,individual,GB,software engineer,medium,verified,False,7376.53
+C-N0095,Eva Brown,2017-01-14,individual,AU,retail worker,low,verified,False,18075.29
+C-N0096,Frank Brown,2017-03-14,individual,FR,teacher,low,verified,False,29052.03
+C-N0097,Grace Brown,2017-02-02,individual,US,teacher,low,verified,False,16602.35
+C-N0098,Hank Brown,2022-12-10,individual,FR,doctor,low,verified,False,14650.53
+C-N0099,Irene Brown,2020-12-02,individual,CA,student,low,verified,False,16603.25
+C-N0100,Jack Brown,2016-08-05,individual,JP,software engineer,medium,verified,False,38975.03
+C-N0101,Karen Brown,2015-08-28,individual,US,accountant,medium,verified,False,7722.67
+C-N0102,Leo Brown,2016-03-06,individual,US,teacher,low,verified,False,27024.91
+C-N0103,Maria Brown,2016-01-02,individual,US,software engineer,low,pending,False,21515.4
+C-N0104,Nathan Brown,2017-05-09,individual,SG,teacher,low,verified,False,28362.81
+C-N0105,Olivia Brown,2017-09-12,individual,SG,teacher,low,verified,False,6275.46
+C-N0106,Paul Brown,2021-08-12,individual,JP,software engineer,low,verified,False,21729.21
+C-N0107,Quinn Brown,2016-03-05,business,JP,corporate banking,low,verified,False,21612.56
+C-N0108,Rachel Brown,2016-09-29,individual,AU,doctor,low,verified,False,9647.68
+C-N0109,Sam Brown,2015-07-28,individual,FR,teacher,high,pending,False,2676.64
+C-N0110,Tina Brown,2021-07-11,individual,SG,lawyer,medium,verified,False,8864.13
+C-N0111,Uma Brown,2018-09-08,business,US,corporate banking,low,pending,False,11115.97
+C-N0112,Victor Brown,2022-01-19,individual,CA,student,low,incomplete,False,8173.46
+C-N0113,Wendy Brown,2018-10-27,individual,DE,teacher,low,verified,False,19566.61
+C-N0114,Xavier Brown,2015-04-03,individual,DE,lawyer,low,incomplete,False,14736.0
+C-N0115,Yara Brown,2020-12-04,individual,SG,lawyer,low,verified,False,13127.99
+C-N0116,Zack Brown,2015-01-15,individual,SG,doctor,low,verified,False,17941.02
+C-N0117,Amber Brown,2015-08-19,individual,SG,teacher,low,verified,False,16400.85
+C-N0118,Brian Brown,2019-08-29,individual,US,lawyer,low,verified,False,12696.24
+C-N0119,Clara Brown,2022-09-28,individual,SG,nurse,low,verified,False,11578.86
+C-N0120,Derek Brown,2016-06-15,business,JP,corporate banking,low,verified,False,28401.4
+C-N0121,Alice Jones,2017-10-26,individual,GB,lawyer,medium,verified,True,14298.63
+C-N0122,Bob Jones,2017-03-21,individual,CA,software engineer,low,verified,False,25920.28
+C-N0123,Carol Jones,2020-01-07,business,GB,corporate banking,medium,pending,False,13267.74
+C-N0124,David Jones,2015-01-29,individual,FR,lawyer,low,verified,False,6988.91
+C-N0125,Eva Jones,2015-03-03,individual,AU,consultant,low,verified,False,22987.2
+C-N0126,Frank Jones,2020-03-21,business,US,corporate banking,low,verified,False,26734.51
+C-N0127,Grace Jones,2015-03-02,individual,FR,retail worker,low,verified,False,15478.65
+C-N0128,Hank Jones,2017-03-06,individual,DE,accountant,low,verified,False,13321.65
+C-N0129,Irene Jones,2019-06-07,business,DE,corporate banking,low,pending,False,20296.24
+C-N0130,Jack Jones,2016-05-12,individual,US,contractor,low,verified,False,15981.54
+C-N0131,Karen Jones,2021-10-03,individual,JP,lawyer,low,pending,False,12092.14
+C-N0132,Leo Jones,2018-12-14,individual,FR,contractor,low,verified,False,21662.12
+C-N0133,Maria Jones,2022-06-22,individual,JP,student,low,verified,False,7074.45
+C-N0134,Nathan Jones,2022-08-26,individual,GB,contractor,low,verified,False,17626.13
+C-N0135,Olivia Jones,2021-12-13,individual,CA,doctor,low,pending,False,12736.81
+C-N0136,Paul Jones,2019-02-02,individual,DE,teacher,low,verified,False,20068.57
+C-N0137,Quinn Jones,2018-08-11,individual,GB,contractor,low,verified,False,27440.53
+C-N0138,Rachel Jones,2018-05-06,individual,JP,teacher,low,verified,False,2059.06
+C-N0139,Sam Jones,2015-01-19,individual,US,accountant,low,pending,False,7822.98
+C-N0140,Tina Jones,2017-03-20,individual,FR,nurse,low,verified,False,14362.94
+C-N0141,Uma Jones,2018-03-01,individual,GB,doctor,low,verified,False,22892.01
+C-N0142,Victor Jones,2021-01-13,business,DE,corporate banking,low,verified,False,27723.14
+C-N0143,Wendy Jones,2018-03-27,individual,FR,lawyer,low,verified,False,20689.49
+C-N0144,Xavier Jones,2015-09-28,individual,US,retail worker,medium,verified,False,19566.55
+C-N0145,Yara Jones,2016-03-14,individual,GB,software engineer,medium,verified,False,29790.72
+C-N0146,Zack Jones,2018-07-19,business,US,corporate banking,low,verified,False,14228.22
+C-N0147,Amber Jones,2016-08-26,individual,GB,contractor,medium,verified,False,11481.62
+C-N0148,Brian Jones,2020-05-04,individual,JP,retail worker,low,pending,False,7842.61
+C-N0149,Clara Jones,2019-07-14,individual,CA,accountant,high,verified,False,6622.1
+C-N0150,Derek Jones,2022-06-28,business,AU,corporate banking,low,verified,False,18549.38
+C-N0151,Alice Garcia,2017-08-11,individual,GB,teacher,low,verified,False,20232.83
+C-N0152,Bob Garcia,2015-01-13,individual,GB,retail worker,low,verified,False,24587.21
+C-N0153,Carol Garcia,2020-08-04,individual,DE,student,high,verified,False,10787.51
+C-N0154,David Garcia,2020-09-01,individual,JP,teacher,low,pending,False,22541.97
+C-N0155,Eva Garcia,2018-08-03,individual,AU,consultant,low,verified,False,3470.93
+C-N0156,Frank Garcia,2016-03-31,individual,GB,student,low,pending,False,46638.5
+C-N0157,Grace Garcia,2020-07-11,individual,GB,nurse,low,pending,False,4567.07
+C-N0158,Hank Garcia,2017-08-17,individual,SG,lawyer,low,verified,False,11712.74
+C-N0159,Irene Garcia,2016-02-08,individual,FR,nurse,medium,verified,False,6916.86
+C-N0160,Jack Garcia,2019-03-22,business,US,corporate banking,medium,verified,False,15239.74
+C-N0161,Karen Garcia,2022-07-13,individual,SG,nurse,low,verified,False,17251.92
+C-N0162,Leo Garcia,2017-07-19,individual,US,nurse,low,verified,False,32802.67
+C-N0163,Maria Garcia,2018-04-25,individual,JP,consultant,medium,verified,False,27031.71
+C-N0164,Nathan Garcia,2018-02-21,individual,SG,student,low,verified,False,18048.38
+C-N0165,Olivia Garcia,2016-08-01,individual,GB,student,low,verified,False,19533.14
+C-N0166,Paul Garcia,2016-02-21,individual,CA,software engineer,low,verified,False,12339.22
+C-N0167,Quinn Garcia,2020-08-10,individual,AU,contractor,low,verified,False,17105.22
+C-N0168,Rachel Garcia,2017-12-15,individual,SG,lawyer,low,verified,False,53496.12
+C-N0169,Sam Garcia,2022-03-11,individual,SG,software engineer,low,verified,False,5318.06
+C-N0170,Tina Garcia,2017-06-05,individual,AU,retail worker,low,verified,False,13768.78
+C-N0171,Uma Garcia,2017-07-23,individual,DE,student,low,verified,False,18454.96
+C-N0172,Victor Garcia,2018-04-29,individual,FR,lawyer,low,verified,False,34714.55
+C-N0173,Wendy Garcia,2018-08-21,individual,DE,contractor,high,verified,False,30411.8
+C-N0174,Xavier Garcia,2015-07-24,individual,DE,consultant,low,incomplete,False,7209.68
+C-N0175,Yara Garcia,2017-11-29,individual,JP,lawyer,low,verified,False,17886.89
+C-N0176,Zack Garcia,2019-07-08,business,SG,corporate banking,low,pending,False,6924.0
+C-N0177,Amber Garcia,2017-01-31,individual,FR,software engineer,low,verified,False,16038.08
+C-N0178,Brian Garcia,2020-01-12,individual,FR,nurse,low,verified,False,14128.56
+C-N0179,Clara Garcia,2015-02-12,individual,JP,accountant,medium,verified,False,27697.58
+C-N0180,Derek Garcia,2016-08-12,individual,GB,accountant,low,verified,False,10666.85
+C-N0181,Alice Miller,2018-10-17,individual,JP,student,medium,pending,False,13659.4
+C-N0182,Bob Miller,2019-09-07,individual,AU,doctor,low,pending,False,4692.08
+C-N0183,Carol Miller,2016-05-28,individual,JP,lawyer,low,verified,False,13040.65
+C-N0184,David Miller,2020-04-30,individual,JP,software engineer,low,verified,False,11578.58
+C-N0185,Eva Miller,2017-12-14,individual,JP,doctor,low,verified,False,5464.95
+C-N0186,Frank Miller,2022-08-14,individual,US,consultant,low,verified,False,24911.84
+C-N0187,Grace Miller,2019-02-26,individual,FR,software engineer,low,verified,False,13438.64
+C-N0188,Hank Miller,2018-11-21,individual,DE,student,medium,verified,False,16188.16
+C-N0189,Irene Miller,2017-03-30,individual,GB,consultant,low,verified,False,11963.87
+C-N0190,Jack Miller,2021-09-07,business,JP,corporate banking,low,verified,False,10641.37
+C-N0191,Karen Miller,2017-11-20,individual,AU,accountant,low,pending,False,21357.16
+C-N0192,Leo Miller,2022-08-24,individual,AU,contractor,low,verified,False,13006.42
+C-N0193,Maria Miller,2020-01-19,individual,SG,lawyer,low,verified,False,22662.77
+C-N0194,Nathan Miller,2021-09-04,business,SG,corporate banking,low,verified,False,12332.33
+C-N0195,Olivia Miller,2022-12-20,individual,FR,nurse,low,verified,False,18241.75
+C-N0196,Paul Miller,2019-11-23,business,US,corporate banking,low,verified,False,18209.39
+C-N0197,Quinn Miller,2017-09-15,individual,FR,nurse,low,pending,False,18066.7
+C-N0198,Rachel Miller,2017-01-11,individual,JP,nurse,low,verified,False,25617.57
+C-N0199,Sam Miller,2020-02-09,individual,DE,software engineer,low,verified,False,7519.97
+C-N0200,Tina Miller,2022-12-02,individual,DE,student,low,verified,False,16871.84
+C-STR01,Uma Miller,2016-02-28,individual,GB,teacher,medium,verified,False,32044.0
+C-STR02,Victor Miller,2020-03-18,individual,AU,student,medium,verified,False,24715.42
+C-STR03,Wendy Miller,2019-10-11,individual,GB,student,high,verified,False,27960.35
+C-STR04,Xavier Miller,2016-03-12,individual,JP,nurse,low,incomplete,False,44157.28
+C-STR05,Yara Miller,2015-08-23,individual,FR,nurse,low,verified,False,18033.34
+C-STR06,Zack Miller,2021-12-01,individual,AU,teacher,low,verified,False,51228.0
+C-STR07,Amber Miller,2018-03-29,individual,FR,lawyer,low,verified,False,19592.55
+C-STR08,Brian Miller,2019-07-14,individual,CA,software engineer,medium,verified,False,32959.77
+C-STR09,Clara Miller,2019-03-16,individual,DE,teacher,low,verified,False,33130.86
+C-STR10,Derek Miller,2019-10-07,individual,US,accountant,low,verified,False,30514.71
+C-HUB01,Alice Davis,2021-07-22,business,DE,corporate banking,low,pending,False,29142.48
+C-HUB02,Bob Davis,2017-02-05,business,US,corporate banking,low,verified,False,19951.01
+C-HUB03,Carol Davis,2017-01-08,business,JP,corporate banking,low,verified,False,13091.36
+C-SMF01,David Davis,2021-05-18,individual,US,teacher,low,verified,False,6787.04
+C-SMF02,Eva Davis,2017-12-26,individual,DE,contractor,low,verified,False,10049.66
+C-SMF03,Frank Davis,2018-01-05,individual,SG,teacher,low,verified,False,12812.62
+C-SMF04,Grace Davis,2015-09-06,individual,JP,lawyer,low,verified,True,25486.52
+C-SMF05,Hank Davis,2015-04-14,individual,GB,student,low,verified,False,6324.31
+C-SMF06,Irene Davis,2020-03-17,individual,US,accountant,low,verified,False,29593.5
+C-SMF07,Jack Davis,2015-11-26,individual,JP,accountant,low,verified,False,14516.71
+C-SMF08,Karen Davis,2019-12-31,individual,US,consultant,low,verified,False,7117.41
+C-SMF09,Leo Davis,2022-09-07,individual,US,software engineer,low,verified,False,33162.25
+C-SMF10,Maria Davis,2018-04-07,individual,CA,accountant,low,verified,False,22709.75
+C-SMF11,Nathan Davis,2017-01-26,individual,JP,student,low,verified,False,13020.28
+C-SMF12,Olivia Davis,2017-01-21,individual,FR,retail worker,low,verified,False,1963.28
+C-SMF13,Paul Davis,2019-03-24,individual,CA,teacher,low,verified,False,9750.83
+C-SMF14,Quinn Davis,2019-12-10,individual,DE,doctor,low,verified,False,20325.51
+C-SMF15,Rachel Davis,2018-02-15,individual,SG,contractor,low,pending,False,31426.61
+C-SMF16,Sam Davis,2017-09-16,individual,US,lawyer,medium,verified,False,18971.02
+C-SMF17,Tina Davis,2017-06-29,individual,US,contractor,low,verified,False,9398.37
+C-SMF18,Uma Davis,2018-08-24,individual,FR,software engineer,medium,verified,False,13208.55
+C-SMF19,Victor Davis,2016-10-02,individual,AU,doctor,medium,verified,False,28276.92
+C-SMF20,Wendy Davis,2021-11-14,individual,AU,teacher,low,verified,False,12875.89
+C-SMF21,Xavier Davis,2022-11-02,individual,CA,doctor,low,pending,False,10545.97
+C-SMF22,Yara Davis,2017-07-10,individual,DE,student,medium,verified,False,10442.62
+C-SMF23,Zack Davis,2022-11-10,individual,DE,student,medium,verified,False,21183.25
+C-SMF24,Amber Davis,2017-01-08,individual,GB,nurse,low,verified,False,9735.98
+C-LAY01,Brian Davis,2021-06-03,business,GB,corporate banking,low,verified,False,33042.84
+C-LAY02,Clara Davis,2019-05-07,business,CA,corporate banking,low,verified,False,18793.16
+C-LAY03,Derek Davis,2018-11-26,business,US,corporate banking,low,verified,False,19971.81
+C-LAY04,Alice Wilson,2018-05-07,business,JP,corporate banking,low,pending,False,13766.03
+C-LAY05,Bob Wilson,2015-09-01,business,DE,corporate banking,low,verified,False,13111.83
+C-LAY06,Carol Wilson,2019-10-30,business,JP,corporate banking,low,verified,False,31122.95
+C-LAY07,David Wilson,2020-01-28,business,JP,corporate banking,low,pending,False,12377.62
+C-LAY08,Eva Wilson,2022-03-30,business,AU,corporate banking,low,pending,False,33740.11
+C-LAY09,Frank Wilson,2016-12-04,business,SG,corporate banking,high,verified,False,79919.59
+C-LAY10,Grace Wilson,2016-11-11,business,FR,corporate banking,low,verified,True,13746.98
+C-LAY11,Hank Wilson,2018-12-28,business,CA,corporate banking,low,verified,True,12832.23
+C-LAY12,Irene Wilson,2021-08-05,business,SG,corporate banking,low,verified,False,4284.53
+C-LAY13,Jack Wilson,2017-12-20,business,AU,corporate banking,low,verified,False,31580.1
+C-LAY14,Karen Wilson,2015-04-06,business,SG,corporate banking,low,verified,False,34639.07
+C-LAY15,Leo Wilson,2015-01-03,business,JP,corporate banking,high,verified,False,28808.63
+C-LAY16,Maria Wilson,2018-05-19,business,US,corporate banking,low,verified,False,145459.0
+C-LAY17,Nathan Wilson,2019-09-11,business,SG,corporate banking,low,verified,False,146870.6
+C-LAY18,Olivia Wilson,2019-01-28,business,JP,corporate banking,low,verified,False,8204.84
+C-LAY19,Paul Wilson,2015-03-30,business,DE,corporate banking,medium,verified,False,30507.47
+C-LAY20,Quinn Wilson,2015-07-02,business,US,corporate banking,medium,verified,False,20084.31
+C-LAY21,Rachel Wilson,2022-06-17,business,GB,corporate banking,low,verified,False,25868.2
+C-LAY22,Sam Wilson,2021-05-03,business,DE,corporate banking,low,verified,False,29682.65
+C-LAY23,Tina Wilson,2021-09-03,business,US,corporate banking,low,verified,False,25823.06
+C-LAY24,Uma Wilson,2016-11-10,business,DE,corporate banking,low,verified,False,14329.93
+C-LAY25,Victor Wilson,2015-11-15,business,AU,corporate banking,low,verified,False,5678.77
+C-RCO01,Wendy Wilson,2018-05-10,business,CA,corporate banking,low,verified,False,10977.8
+C-RCO02,Xavier Wilson,2021-12-13,business,US,corporate banking,low,verified,False,9991.88
+C-RCO03,Yara Wilson,2018-02-18,business,FR,corporate banking,low,verified,False,19502.26
+C-RCO04,Zack Wilson,2021-01-29,business,US,corporate banking,low,verified,False,10334.56
+C-RCO05,Amber Wilson,2021-07-23,business,CA,corporate banking,low,verified,False,30223.45
+C-RCO06,Brian Wilson,2016-12-11,business,DE,corporate banking,low,verified,False,23708.01
+C-RCO07,Clara Wilson,2018-11-28,business,CA,corporate banking,medium,verified,False,38913.34
+C-RCO08,Derek Wilson,2017-10-09,business,CA,corporate banking,low,pending,False,16851.29
