@@ -284,7 +284,8 @@ generator doesn't inject cohorts for those two patterns, so they're implemented 
 ## Team
 
 - **Track A** (agent core, orchestration, API) — Kapilan Kathirvel
-- **Track B** (data, detection, ML, UI) — teammate
+- **Track B** (data, detection, ML, UI) — Vasudevan Kalyan
+  
 
 Full division of labour, ownership matrix, and the anti-merge-conflict protocol used to build this in
 parallel: **[WORKPLAN.md](WORKPLAN.md)**.
