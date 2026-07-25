@@ -211,20 +211,32 @@ def _run_r3_layering(
     if len(eligible) < R3_MIN_CHAIN_LENGTH + 1:
         return hits
 
-    # Build directed graph: A → B with amount and cross_border
+    # ------------------------------------------------------------------
+    # Fast-exit: R3 requires ≥ 1 cross-border hop per chain.  If the
+    # dataset has NO cross-border transactions at all (e.g. IBM HI-Small
+    # which records UNK/UNK for all countries) then no chain can ever
+    # satisfy that constraint.  Skip the entire expensive graph search.
+    # ------------------------------------------------------------------
+    if not eligible["is_cross_border"].any():
+        return hits
+
+    # ------------------------------------------------------------------
+    # Build directed graph vectorised — avoid iterrows() over all eligible rows.
+    # Collapse duplicate sender→receiver pairs, keeping the max-amount edge.
+    # ------------------------------------------------------------------
     G = nx.DiGraph()
-    for _, row in eligible.iterrows():
-        u = row["sender_id"]
-        v = row["receiver_id"]
-        amount = row["amount"]
-        xb = bool(row["is_cross_border"])
-        ts = row["timestamp"]
-        if G.has_edge(u, v):
-            # Keep max-amount edge data per pair (simplification)
-            if amount > G[u][v]["amount"]:
-                G[u][v].update({"amount": amount, "is_cross_border": xb, "timestamp": ts})
-        else:
-            G.add_edge(u, v, amount=float(amount), is_cross_border=xb, timestamp=ts)
+    edge_df = (
+        eligible[["sender_id", "receiver_id", "amount", "is_cross_border", "timestamp"]]
+        .sort_values("amount", ascending=False)          # max-amount edge comes first
+        .drop_duplicates(subset=["sender_id", "receiver_id"], keep="first")  # one edge per pair
+    )
+    for row in edge_df.itertuples(index=False):
+        G.add_edge(
+            row.sender_id, row.receiver_id,
+            amount=float(row.amount),
+            is_cross_border=bool(row.is_cross_border),
+            timestamp=row.timestamp,
+        )
 
     # Pass-through threshold lookup
     ppt_feat = "pass_through_ratio" in features.columns
@@ -325,13 +337,19 @@ def _run_r4_rapid_cashout(
     if large_in.empty or cash_out.empty:
         return hits
 
+    # Pre-group cash outflows by sender so each per-customer lookup is O(1)
+    # instead of an O(len(cash_out)) scan per customer inside the loop.
+    cash_out_by_sender: dict[str, pd.DataFrame] = {
+        cid: grp for cid, grp in cash_out.groupby("sender_id")
+    }
+
     already_hit: set[str] = set()
 
     for cid, in_grp in large_in.groupby("receiver_id"):
         if cid in already_hit:
             continue
-        cust_cash = cash_out[cash_out["sender_id"] == cid]
-        if cust_cash.empty:
+        cust_cash = cash_out_by_sender.get(cid)
+        if cust_cash is None or cust_cash.empty:
             continue
 
         in_ts   = in_grp["timestamp"].values.astype("int64")

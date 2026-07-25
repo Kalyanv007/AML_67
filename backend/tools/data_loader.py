@@ -51,6 +51,13 @@ _SYNTHETIC_FILE = Path(__file__).parent.parent.parent / "data" / "sample" / \
 _SYNTHETIC_CUSTOMERS_FILE = Path(__file__).parent.parent.parent / "data" / \
     "sample" / "aml_sample_customers.csv"
 
+# Parquet cache for the stratified IBM sample (data/processed/ is gitignored).
+# load_data(source='ibm_stratified') reads this if present, writes it on first build.
+_PROCESSED_DIR        = Path(__file__).parent.parent.parent / "data" / "processed"
+_IBM_STRAT_TX_CACHE   = _PROCESSED_DIR / "ibm_stratified_sample.parquet"
+_IBM_STRAT_CUST_CACHE = _PROCESSED_DIR / "ibm_stratified_customers.parquet"
+_IBM_STRAT_META_CACHE = _PROCESSED_DIR / "ibm_stratified_cache_meta.json"
+
 # ---------------------------------------------------------------------------
 # Currency name → ISO 4217
 # ---------------------------------------------------------------------------
@@ -654,7 +661,8 @@ def _validate_canonical(tx_df: pd.DataFrame, cust_df: pd.DataFrame) -> list[str]
         "source": (
             "str — 'ibm' | 'ibm_stratified' | 'synthetic'. "
             "'ibm_stratified' loads a stratified sample of the IBM HI-Small dataset "
-            "with over-represented laundering-positive customers for real-data testing."
+            "with over-represented laundering-positive customers for real-data testing. "
+            "Uses a parquet cache (data/processed/) when available for fast loads (~2s vs ~153s)."
         ),
         "nrows": "int | None — if set, load only this many transaction rows (ibm source only, for testing).",
         "target_size": (
@@ -666,6 +674,10 @@ def _validate_canonical(tx_df: pd.DataFrame, cust_df: pd.DataFrame) -> list[str]
             "Each positive customer's FULL history is included, so this caps the positive-side row count."
         ),
         "seed": "int — random seed for clean-customer sampling in ibm_stratified mode (default 42).",
+        "force_rebuild": (
+            "bool — if True, ignore the parquet cache and re-stratify from the raw CSV, then "
+            "overwrite the cache. Use after changing seed or target_size. Default False."
+        ),
     },
     description=(
         "Load a dataset and convert it to the canonical transactions + customers schema "
@@ -680,6 +692,7 @@ def load_data(
     target_size: int = 200_000,
     max_pos_customers: int = 500,
     seed: int = 42,
+    force_rebuild: bool = False,
     **kw,
 ) -> ToolResult:
     """Load and canonicalise a dataset.
@@ -692,6 +705,7 @@ def load_data(
     target_size       : approximate transaction count for 'ibm_stratified' (default 200,000)
     max_pos_customers : max positive customers for 'ibm_stratified' (default 500)
     seed              : random seed for clean-customer sampling in 'ibm_stratified' (default 42)
+    force_rebuild     : if True, ignore the parquet cache and rebuild from the raw CSV (default False)
     """
     try:
         if source == "ibm":
@@ -712,25 +726,64 @@ def load_data(
             source_label = "IBM AML HI-Small"
 
         elif source == "ibm_stratified":
-            if not _IBM_TRANS_FILE.exists():
-                return ToolResult(
-                    ok=False,
-                    error=(
-                        f"IBM AML HI-Small dataset not found at {_IBM_TRANS_FILE}. "
-                        "Run: import kagglehub; kagglehub.dataset_download("
-                        "'ealtman2019/ibm-transactions-for-anti-money-laundering-aml')"
-                    ),
+            use_cache = _IBM_STRAT_TX_CACHE.exists() and not force_rebuild
+
+            if use_cache:
+                # Fast path: read pre-built parquet (~2s vs ~153s)
+                import json as _json
+                tx_df   = pd.read_parquet(_IBM_STRAT_TX_CACHE)
+                cust_df = pd.read_parquet(_IBM_STRAT_CUST_CACHE)
+                tx_df["timestamp"] = pd.to_datetime(tx_df["timestamp"])
+                cache_note = "(warm parquet cache)"
+                if _IBM_STRAT_META_CACHE.exists():
+                    with open(_IBM_STRAT_META_CACHE) as _f:
+                        meta = _json.load(_f)
+                    cache_note = (
+                        f"(warm cache: target={meta.get('target_size','?')}, "
+                        f"seed={meta.get('seed','?')}, "
+                        f"built={meta.get('built_utc','?')[:10]})"
+                    )
+            else:
+                # Cold path: build from raw CSV and save cache for next time
+                if not _IBM_TRANS_FILE.exists():
+                    return ToolResult(
+                        ok=False,
+                        error=(
+                            f"IBM AML HI-Small dataset not found at {_IBM_TRANS_FILE}. "
+                            "Run: import kagglehub; kagglehub.dataset_download("
+                            "'ealtman2019/ibm-transactions-for-anti-money-laundering-aml')"
+                        ),
+                    )
+                tx_df, cust_df = _stratified_sample_ibm(
+                    trans_path=str(_IBM_TRANS_FILE),
+                    accts_path=str(_IBM_ACCTS_FILE),
+                    target_size=target_size,
+                    max_pos_customers=max_pos_customers,
+                    seed=seed,
                 )
-            tx_df, cust_df = _stratified_sample_ibm(
-                trans_path=str(_IBM_TRANS_FILE),
-                accts_path=str(_IBM_ACCTS_FILE),
-                target_size=target_size,
-                max_pos_customers=max_pos_customers,
-                seed=seed,
-            )
+                # Write cache for next run
+                import json as _json
+                from datetime import datetime as _dt, timezone as _tz
+                _PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+                tx_df.to_parquet(_IBM_STRAT_TX_CACHE,   index=False)
+                cust_df.to_parquet(_IBM_STRAT_CUST_CACHE, index=False)
+                meta = {
+                    "built_utc":         _dt.now(_tz.utc).isoformat(),
+                    "source_csv":        str(_IBM_TRANS_FILE),
+                    "target_size":       target_size,
+                    "max_pos_customers": max_pos_customers,
+                    "seed":              seed,
+                    "row_count":         len(tx_df),
+                    "customer_count":    int(tx_df["sender_id"].nunique()),
+                    "pos_row_count":     int(tx_df["label_is_laundering"].sum()),
+                }
+                with open(_IBM_STRAT_META_CACHE, "w") as _f:
+                    _json.dump(meta, _f, indent=2)
+                cache_note = "(cache written for next run)"
+
             source_label = (
-                f"IBM AML HI-Small (stratified: target={target_size:,}, "
-                f"max_pos_customers={max_pos_customers}, seed={seed})"
+                f"IBM AML HI-Small stratified {cache_note}: "
+                f"target={target_size:,}, max_pos={max_pos_customers}, seed={seed}"
             )
 
         elif source == "synthetic":
