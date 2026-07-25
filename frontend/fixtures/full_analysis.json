@@ -1,0 +1,211 @@
+{
+  "query": "Analyse this dataset for suspicious activity",
+  "intent": {
+    "raw_query": "Analyse this dataset for suspicious activity",
+    "intent": "full_analysis",
+    "filters": {
+      "date_from": null,
+      "date_to": null,
+      "countries": [],
+      "txn_types": [],
+      "amount_min": null,
+      "amount_max": null,
+      "min_txn_count": null,
+      "customer_segment": null
+    },
+    "entities": [],
+    "pattern_types": [],
+    "top_n": 10,
+    "confidence": 0.95,
+    "parsed_by": "llm"
+  },
+  "plan": {
+    "plan_id": "fixture-full-001",
+    "steps": [
+      {
+        "tool": "load_data",
+        "params": {},
+        "reason": "Load the canonical transaction dataset into working context before any analysis.",
+        "status": "ok",
+        "duration_ms": 312,
+        "skip_reason": null
+      },
+      {
+        "tool": "eda_profile",
+        "params": {},
+        "reason": "Full analysis starts with an exploratory data profile to surface distribution, missingness and threshold-proximity signals.",
+        "status": "ok",
+        "duration_ms": 487,
+        "skip_reason": null
+      },
+      {
+        "tool": "feature_engineer",
+        "params": {"pattern_types": null},
+        "reason": "Compute all AML features — rolling windows, z-scores, velocity, pass-through ratio — before running detectors.",
+        "status": "ok",
+        "duration_ms": 2104,
+        "skip_reason": null
+      },
+      {
+        "tool": "rule_detect",
+        "params": {"patterns": null},
+        "reason": "Apply R1-R6 rule detectors over all patterns; evidence dicts feed the narrator.",
+        "status": "ok",
+        "duration_ms": 931,
+        "skip_reason": null
+      },
+      {
+        "tool": "ml_detect",
+        "params": {},
+        "reason": "IsolationForest + LOF over all feature vectors to catch anomalies that don't match any known rule pattern.",
+        "status": "ok",
+        "duration_ms": 1288,
+        "skip_reason": null
+      },
+      {
+        "tool": "risk_classify",
+        "params": {},
+        "reason": "Fuse rule weights and ML percentiles into final risk scores and escalation actions.",
+        "status": "ok",
+        "duration_ms": 44,
+        "skip_reason": null
+      }
+    ],
+    "decisions": [
+      "rule_detect returned 23 hits — ml_detect kept in plan to corroborate and catch additional anomalies.",
+      "No filter applied — query is dataset-wide; using full 2,000-row sample."
+    ],
+    "tools_considered_but_skipped": [
+      "filter_data — no date, country or entity filter in query",
+      "aggregate_query — full_analysis does not target a threshold count",
+      "entity_lookup — no specific entity mentioned"
+    ]
+  },
+  "flags": [
+    {
+      "entity_type": "customer",
+      "entity_id": "C-HUB01",
+      "risk_score": 90.34,
+      "risk_level": "high",
+      "escalation": "report",
+      "patterns": ["layering", "rapid_cashout"],
+      "triggered_rules": ["R3", "R4"],
+      "ml_score": 0.984,
+      "evidence": [
+        {"rule_id": "R3", "feature": "pass_through_ratio", "value": 0.91, "threshold": 0.70, "note": "4-hop layering chain US→DE→SG→CH with pass-through ratio 0.91"},
+        {"rule_id": "R4", "feature": "cashout_ratio", "value": 0.78, "threshold": 0.50, "note": "USD 42,000 inbound; 3 cash withdrawals within 18h totalling USD 32,760"}
+      ],
+      "explanation": "C-HUB01 exhibits a 4-hop wire-transfer chain across 3 jurisdictions (US, DE, SG, CH) with a pass-through ratio of 0.91 — strongly indicative of layering to obscure fund origin. Within 18 hours of a large inbound wire of USD 42,000 the account made 3 ATM/branch withdrawals totalling USD 32,760 (78 % cashout ratio). IsolationForest ranks this entity at the 98th percentile for anomaly score.",
+      "sar_draft": "Suspicious Activity Report — C-HUB01. Pattern: Layering + Rapid Cashout. USD 42,000 received via wire, followed by USD 32,760 withdrawn via 3 cash transactions within 18 hours. Multi-jurisdictional wire chain identified: US → DE → SG → CH. Recommend immediate account review and CTR filing if threshold crossed."
+    },
+    {
+      "entity_type": "customer",
+      "entity_id": "C-STR01",
+      "risk_score": 72.5,
+      "risk_level": "high",
+      "escalation": "report",
+      "patterns": ["structuring"],
+      "triggered_rules": ["R1"],
+      "ml_score": 0.81,
+      "evidence": [
+        {"rule_id": "R1", "feature": "pct_just_below_threshold", "value": 0.87, "threshold": 0.30, "note": "7 of 8 transactions in band $9,000–$9,999 within a 7-day window"},
+        {"rule_id": null, "feature": "rolling_7d_count", "value": 8, "threshold": null, "note": "8 transactions in 7 days, significantly above peer baseline"}
+      ],
+      "explanation": "C-STR01 placed 8 transactions in the $9,000–$9,999 band within 7 days, with 87% of all outbound transactions falling just below the $10,000 CTR reporting threshold. This is the defining signal of structuring (smurfing avoidance of Currency Transaction Reports). ML anomaly score is at the 81st percentile.",
+      "sar_draft": "Suspicious Activity Report — C-STR01. Pattern: Structuring. 8 transactions in band $9,000–$9,999 in 7 days. 87% of transactions placed just below the $10,000 CTR threshold. Recommend SAR filing and enhanced monitoring."
+    },
+    {
+      "entity_type": "customer",
+      "entity_id": "C-SMF01",
+      "risk_score": 58.0,
+      "risk_level": "medium",
+      "escalation": "review",
+      "patterns": ["smurfing"],
+      "triggered_rules": ["R2"],
+      "ml_score": 0.72,
+      "evidence": [
+        {"rule_id": "R2", "feature": "distinct_receivers_48h", "value": 9, "threshold": 5, "note": "9 distinct receivers in 48h, median outbound $8,450"},
+        {"rule_id": null, "feature": "round_amount_ratio", "value": 0.44, "threshold": null, "note": "44% of amounts are round numbers, consistent with coordinated splitting"}
+      ],
+      "explanation": "C-SMF01 sent funds to 9 distinct recipients within 48 hours with a median outbound of $8,450 — a textbook smurfing pattern designed to fragment large sums below reporting thresholds. 44% of amounts are round numbers, suggesting coordinated splitting.",
+      "sar_draft": null
+    },
+    {
+      "entity_type": "customer",
+      "entity_id": "C-VEL01",
+      "risk_score": 38.0,
+      "risk_level": "low",
+      "escalation": "monitor",
+      "patterns": ["velocity"],
+      "triggered_rules": ["R5"],
+      "ml_score": 0.51,
+      "evidence": [
+        {"rule_id": "R5", "feature": "velocity_txns_per_hour", "value": 4.2, "threshold": 2.0, "note": "4.2 txns/hour burst, z-score 8,400 vs pre-burst baseline of $210"},
+        {"rule_id": null, "feature": "amount_zscore_90d", "value": 3.8, "threshold": 3.0, "note": "Transaction amounts during burst are 3.8 std-deviations above 90d mean"}
+      ],
+      "explanation": "C-VEL01 generated 4.2 transactions per hour during a 10-hour window, with burst amounts of ~$50,000 — 3.8 standard deviations above their 90-day historical baseline of $210 per transaction. This velocity anomaly warrants enhanced monitoring.",
+      "sar_draft": null
+    }
+  ],
+  "tables": {
+    "risk_summary": [
+      {"entity_id": "C-HUB01", "risk_score": 90.34, "risk_level": "high", "escalation": "report", "patterns": "layering, rapid_cashout", "triggered_rules": "R3, R4", "ml_score": 0.984},
+      {"entity_id": "C-STR01", "risk_score": 72.5, "risk_level": "high", "escalation": "report", "patterns": "structuring", "triggered_rules": "R1", "ml_score": 0.81},
+      {"entity_id": "C-SMF01", "risk_score": 58.0, "risk_level": "medium", "escalation": "review", "patterns": "smurfing", "triggered_rules": "R2", "ml_score": 0.72},
+      {"entity_id": "C-VEL01", "risk_score": 38.0, "risk_level": "low", "escalation": "monitor", "patterns": "velocity", "triggered_rules": "R5", "ml_score": 0.51}
+    ]
+  },
+  "charts": {
+    "amount_distribution": {
+      "data": [
+        {
+          "type": "histogram",
+          "x": [200, 500, 1000, 2000, 5000, 7500, 9100, 9200, 9300, 9400, 9500, 9600, 9700, 9800, 9900, 9950, 9999, 10000, 12000, 15000, 20000, 50000],
+          "nbinsx": 50,
+          "name": "Transaction Amounts",
+          "marker": {"color": "#6366f1"}
+        }
+      ],
+      "layout": {
+        "title": "Transaction Amount Distribution",
+        "xaxis": {"title": "Amount (USD)"},
+        "yaxis": {"title": "Count"},
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"color": "#e2e8f0"}
+      }
+    },
+    "threshold_proximity": {
+      "data": [
+        {
+          "type": "bar",
+          "x": ["$7k-$8k", "$8k-$9k", "$9k-$9.5k", "$9.5k-$9.9k", "$9.9k-$10k", ">$10k"],
+          "y": [12, 28, 41, 87, 134, 45],
+          "name": "Txns Near $10k Threshold",
+          "marker": {"color": ["#22c55e","#22c55e","#f59e0b","#f97316","#ef4444","#22c55e"]}
+        }
+      ],
+      "layout": {
+        "title": "Threshold-Proximity Histogram (Structuring Signal)",
+        "xaxis": {"title": "Amount Band"},
+        "yaxis": {"title": "Transaction Count"},
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"color": "#e2e8f0"},
+        "shapes": [{"type": "line", "x0": 4.5, "x1": 4.5, "y0": 0, "y1": 150, "line": {"color": "#ef4444", "dash": "dash"}}]
+      }
+    }
+  },
+  "metrics": {
+    "total_transactions": 2000,
+    "total_customers": 270,
+    "flags_raised": 4,
+    "high_risk": 2,
+    "medium_risk": 1,
+    "low_risk": 1,
+    "rules_fired": 28,
+    "ml_entities_scored": 270
+  },
+  "summary": "Full analysis of 2,000 transactions across 270 customers. 4 entities flagged: 2 HIGH (SAR recommended), 1 MEDIUM (review), 1 LOW (monitor). The dominant pattern is structuring (R1), with one confirmed layering chain across 4 jurisdictions. ML anomaly detection corroborates all rule hits and identifies no additional anomalies above the 95th-percentile floor.",
+  "warnings": []
+}
