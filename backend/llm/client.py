@@ -20,6 +20,8 @@ def complete_json(prompt: str, schema_hint: str = "") -> dict[str, Any] | None:
             return _complete_gemini(prompt, schema_hint)
         if settings.llm_provider == "openai" and settings.openai_api_key:
             return _complete_openai(prompt, schema_hint)
+        if settings.llm_provider == "groq" and settings.groq_api_key:
+            return _complete_groq(prompt, schema_hint)
     except Exception:
         return None
     return None
@@ -53,5 +55,20 @@ def _complete_openai(prompt: str, schema_hint: str) -> dict[str, Any] | None:
         messages=[{"role": "user", "content": full_prompt}],
         response_format={"type": "json_object"},
         temperature=0.0,
+    )
+    return json.loads(response.choices[0].message.content)
+
+
+def _complete_groq(prompt: str, schema_hint: str) -> dict[str, Any] | None:
+    from groq import Groq
+
+    client = Groq(api_key=settings.groq_api_key)
+    full_prompt = f"{prompt}\n\n{schema_hint}\nRespond with strict JSON only, no markdown fences."
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": full_prompt}],
+        response_format={"type": "json_object"},
+        temperature=0.0,
+        timeout=_TIMEOUT_SECONDS,
     )
     return json.loads(response.choices[0].message.content)

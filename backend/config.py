@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     llm_provider: str = "gemini"
     gemini_api_key: str = ""
     openai_api_key: str = ""
+    groq_api_key: str = ""
 
     aml_use_mocks: bool = True
     aml_dataset_path: str = "data/sample/aml_sample.csv"
