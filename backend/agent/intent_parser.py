@@ -6,9 +6,13 @@ response, falls back to a deterministic regex/keyword parser that alone must
 cover all 7 intents well enough to demo on (see docs/CONTRACTS.md Contract 4).
 """
 
+import functools
 import re
 from datetime import date, timedelta
 
+import pandas as pd
+
+from backend.config import settings
 from backend.llm.client import complete_json
 from backend.schemas import Filters, PatternType, QueryIntent
 
@@ -29,7 +33,10 @@ MONTHS = {
     "july": 7, "august": 8, "september": 9, "october": 10, "november": 11, "december": 12,
 }
 
-ENTITY_RE = re.compile(r"\b(?:customer|cust|account|acct)?\s*(?:id\s*)?(C-?\d{3,6}|T-?\d{3,6})\b", re.I)
+# Real customer IDs aren't purely numeric (e.g. C-STR02, C-N0001 — Track B's
+# generator scheme), so the ID portion accepts any 2-8 alphanumeric chars
+# after the C-/T- prefix, not just digits.
+ENTITY_RE = re.compile(r"\b(?:customer|cust|account|acct)?\s*(?:id\s*)?([CT]-[A-Z0-9]{2,8})\b", re.I)
 BARE_ID_RE = re.compile(r"\b(\d{4,6})\b")
 COUNT_RE = re.compile(r"(\d+)\s*\+?\s*(?:or more\s*)?transactions?", re.I)
 AMOUNT_RE = re.compile(r"\$\s?([\d,]+(?:\.\d+)?)")
@@ -48,8 +55,26 @@ _SCHEMA_HINT = (
 )
 
 
+@functools.lru_cache(maxsize=1)
+def _dataset_reference_date() -> date:
+    """'Today', for relative date phrases like 'last 30 days'.
+
+    Anchored to the working dataset's own max transaction date, not
+    wall-clock time — the demo dataset is dated 2025-01-01..2025-03-31 and
+    will never be "recent" relative to whenever this actually runs. Falls
+    back to date.today() if the dataset can't be read (e.g. mocks-only runs
+    with no CSV on disk). Cached for the process lifetime — the CSV is
+    static, no reason to re-read it on every query.
+    """
+    try:
+        df = pd.read_csv(settings.aml_dataset_path, usecols=["timestamp"], parse_dates=["timestamp"])
+        return df["timestamp"].max().date()
+    except Exception:
+        return date.today()
+
+
 def parse_intent(raw_query: str, reference_date: date | None = None) -> QueryIntent:
-    reference_date = reference_date or date.today()
+    reference_date = reference_date or _dataset_reference_date()
 
     llm_result = complete_json(f'Classify this AML compliance query: "{raw_query}"', _SCHEMA_HINT)
     if llm_result is not None:
@@ -100,9 +125,13 @@ def _parse_with_rules(raw_query: str, reference_date: date) -> QueryIntent:
     if m:
         top_n = int(m.group(1))
 
-    entities: list[str] = [_normalise_entity(m.group(1)) for m in ENTITY_RE.finditer(raw_query)]
+    entities: list[str] = [m.group(1).upper() for m in ENTITY_RE.finditer(raw_query)]
     if not entities:
-        entities = [_normalise_entity(m.group(1)) for m in BARE_ID_RE.finditer(raw_query)]
+        # no C-/T- prefixed token found — fall back to a bare number and
+        # construct a plausible ID; backend.agent.executor._resolve_entities()
+        # reconciles this against the real dataset's customer_ids by numeric
+        # id once load_data runs, so an exact guess isn't required here.
+        entities = [_normalise_bare_number(m.group(1)) for m in BARE_ID_RE.finditer(raw_query)]
 
     pattern_types: list[PatternType] = []
     for kw, pt in PATTERN_KEYWORDS.items():
@@ -143,9 +172,5 @@ def _classify(q: str, filters: Filters, entities: list[str], pattern_types: list
     return "full_analysis"
 
 
-def _normalise_entity(raw_id: str) -> str:
-    raw_id = raw_id.upper()
-    prefix = "T" if raw_id.startswith("T") else "C"
-    digits = re.sub(r"\D", "", raw_id)
-    width = 6 if prefix == "T" else 5
-    return f"{prefix}-{digits.zfill(width)}"
+def _normalise_bare_number(raw_digits: str) -> str:
+    return f"C-{raw_digits.zfill(5)}"

@@ -158,3 +158,22 @@ def test_eda_intent_runs_no_detection_against_real_tools(real_tools):
     assert all(s.status == "ok" for s in plan.steps)
     assert response.flags == []
     assert response.metrics.get("txn_type_counts") or response.metrics.get("channel_counts")
+
+
+def test_explain_flag_actually_scores_the_entity(real_tools):
+    """Phase 7 fix: explain_flag previously never loaded data (per Contract 4's
+    'reuse cached run' design, which was never wired to anything) and always
+    returned empty. It now loads data and scores just the requested entity."""
+    intent = QueryIntent(raw_query=f"Why was customer {REAL_STRUCTURING_ENTITY} flagged?",
+                          intent="explain_flag", entities=[REAL_STRUCTURING_ENTITY],
+                          parsed_by="rules", confidence=0.9)
+    plan = build_plan(intent)
+    response = run_plan(intent, plan)
+
+    assert all(s.status == "ok" for s in plan.steps)
+    assert "load_data" in [s.tool for s in plan.steps]
+    assert "eda_profile" not in [s.tool for s in plan.steps]
+    assert "ml_detect" not in [s.tool for s in plan.steps]
+    assert len(response.flags) == 1
+    assert response.flags[0].entity_id == REAL_STRUCTURING_ENTITY
+    assert response.flags[0].explanation in response.summary

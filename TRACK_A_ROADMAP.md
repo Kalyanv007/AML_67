@@ -328,12 +328,45 @@ Gemini/OpenAI key is available, before leaning on that path in a Phase 7 demo re
 
 ---
 
-## Phase 7 — Hardening & Demo Prep
+## Phase 7 — Hardening & Demo Prep ✅ DONE
 
-- Every demo query has a graceful, specific answer for the empty-result case.
-- `run_demo.py` starts backend + frontend with one command.
-- **Rehearse with the LLM key unset** — this is a demo-day risk, not a nice-to-have.
-- Fill in the remaining README sections: setup, example queries + expected plans, screenshots, limitations.
+Ran 11 representative demo queries live against real data **before** writing any documentation — this is
+what actually found the bugs below, not a post-hoc check. Unit/integration tests check *which tools ran*;
+they don't check *whether the answer was non-empty and correct*. Both kinds of verification were needed.
+
+**Bugs found and fixed** (all in files Track A owns):
+
+1. **Date-anchoring bug**, critical — broke the brief's own example query. "Find structuring patterns in
+   the last 30 days" resolved "last 30 days" against `date.today()` (wall-clock), but the dataset is dated
+   Jan–Mar 2025 — zero results. Fixed: `intent_parser._dataset_reference_date()` anchors relative dates to
+   the dataset's own max transaction date, cached per process, with a `date.today()` fallback if the CSV
+   can't be read.
+2. **Entity-ID regex too narrow**, critical. Only recognized pure-digit IDs (`C-04521`); real IDs are
+   alphanumeric (`C-STR02`, `C-N0001`). "Is customer C-STR02 suspicious?" misclassified as `full_analysis`.
+   Fixed: `ENTITY_RE` now accepts `[CT]-[A-Z0-9]{2,8}`; normalization split so prefixed real-looking IDs
+   pass through as-is (bare numbers still get the constructed-guess treatment for `_resolve_entities()`).
+3. **`explain_flag` never actually worked** — asked the user rather than silently deciding, since
+   Contract 4's text explicitly said "reuse a cached run" (a design choice, not a bug). Chose to make it
+   work: its plan now loads data and scores the entity fresh, same shape as `entity_investigation` minus
+   `filter_data`. The deviation from Contract 4's original text is documented inline in the planner code.
+4. **`_summarise()` polish**: added intent-specific summary text for `eda` (was using a detection-flavoured
+   generic fallback that didn't fit) and `explain_flag` (previously had no case at all).
+5. **A self-inflicted but real test-isolation bug**: creating a real `.env` (`AML_USE_MOCKS=0`) for the
+   final live-boot verification broke 6 tests in `test_api.py`/`test_executor.py` that asserted against
+   mock fixture data without ever *forcing* mock mode — they relied on `settings.aml_use_mocks` defaulting
+   to `True` in the *absence* of a `.env`. Fixed with an `autouse` `force_mocks` fixture in both files,
+   mirroring `test_integration.py`'s existing `real_tools` fixture for the opposite direction.
+
+**Also built**: `run_demo.py` (starts backend + frontend together, opens the browser, clean shutdown);
+fixed `.env.example` (`AML_API_BASE_URL`, which nothing read, → `AML_API_URL`, which `frontend/app.py`
+actually reads; `AML_USE_MOCKS` default `1→0` now that real tools exist); added `kagglehub` to
+`requirements.txt` (imported by `data_loader.py`, was missing — a clean clone would `ImportError` on the
+IBM loader path); `README.md` and `ARCHITECTURE.md`.
+
+**Final verification**: booted `uvicorn` with a real `.env` (matching what a fresh clone actually runs)
+and curled the two previously-broken queries through the **actual HTTP API**, not just Python-level calls
+— both now return correct results. Full suite: **185/185 passing**, confirmed with that same real `.env`
+present on disk (not just in a clean environment with no `.env`).
 
 ---
 

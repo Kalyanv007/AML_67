@@ -6,40 +6,61 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-25, post-Phase-6 — two standalone fixes landed: entity-ID resolution and
-LLM-call-volume capping. Phase 7 not started.
+**Last updated:** 2026-07-25, Phase 7 done.
 
 ---
 
 ## Where we are right now
 
-**Phases 0–6 done, plus two standalone fixes layered on top. Phase 7 (hardening & demo prep) not
-started.** Track B pushed their real tools (`data_loader`, `filters`, `eda`, `features`, `rules`,
-`ml_detect`, `aggregate`, `entity`, `risk`) and the real sample dataset (2,002 transactions, 270
-customers) between sessions. Phase 6 integration against them found and fixed 5 real bugs — full
-root-cause narrative in TRACK_A_ROADMAP.md Phase 6.
+**Phases 0–7 all done**, plus two standalone fixes (entity-ID resolution, LLM call-volume capping) and
+four bugs found and fixed during Phase 7 hardening (3 in the agent pipeline, 1 test-isolation bug found by
+my own final verification step — see decision log #18). `pytest tests/ -v` → **185/185 passing**,
+confirmed with a real `.env` on disk (`AML_USE_MOCKS=0`) — not just in a clean environment. All 11
+representative demo queries manually verified against real data — 8 via direct Python calls, then the
+final 2 (structuring/last-30-days, C-STR02 entity investigation) re-verified through the **actual live
+HTTP API** (`uvicorn` + `curl`), not just Python-level calls, with that same real `.env` in place, matching
+what a fresh clone actually runs.
 
-**Fix 1 — entity-ID resolution** (`executor.py`): real customer IDs (`C-N0001`, `C-STR02`, ...) don't
-match the parser's numeric normalization of a bare number ("4521" → `C-04521`). `_resolve_entities()`
-matches by numeric id (not substring, to avoid false-positives on short numbers) right after `load_data`
-runs, propagating the resolved ID into `intent.entities` and any already-built `entity_lookup` step.
-Caught and fixed a real bug in the process: resolution notes were only logged when the entity list
-actually changed, silently dropping the "no match" explanation.
+### Phase 7 findings (all fixed, all in files Track A owns)
+1. **Date-anchoring bug (critical — broke a brief-mandated example query)**: "last 30 days" resolved
+   against `date.today()` (wall-clock), but the dataset is dated Jan–Mar 2025 — so "Find structuring
+   patterns in the last 30 days" returned **zero flags** against real data despite working fine against
+   mocks. Fixed: `intent_parser._dataset_reference_date()` anchors relative dates to the dataset's own
+   max transaction date instead, cached per process.
+2. **Entity-ID regex too narrow (critical)**: only recognized pure-digit IDs (`C-04521`); real IDs are
+   alphanumeric (`C-STR02`, `C-N0001`). "Is customer C-STR02 suspicious?" — a real ID our own system would
+   show a user — misclassified as `full_analysis` instead of `entity_investigation`. Fixed: `ENTITY_RE`
+   now accepts `[CT]-[A-Z0-9]{2,8}`; normalization split into two paths (prefixed real-looking IDs pass
+   through as-is, bare numbers still get the constructed-guess treatment for `_resolve_entities()` to
+   reconcile later).
+3. **`explain_flag` never actually worked** — asked the user how to handle it; chose "make it actually
+   work." Its plan never called `load_data` (Contract 4 said "reuse a cached run," which was never wired
+   to anything), so it always returned empty. Changed its plan to load data and score the entity fresh,
+   same shape as `entity_investigation` minus `filter_data`. Documented the deviation from Contract 4's
+   original text directly in the planner code comment.
+4. **Minor polish**: `_summarise()` had generic fallback text for `eda` ("No suspicious activity was
+   flagged") that didn't fit a non-detection query, and no case at all for `explain_flag`. Added
+   intent-specific summaries for both.
 
-**Fix 2 — LLM call volume capped to HIGH-risk flags** (`narrator.py`): while discussing whether a free-tier
-LLM key would be sufficient, found that `_explain()` called the LLM once *per flag* — a 30-flag
-`full_analysis` result meant 30 calls for one query, well past Gemini free tier's ~15 req/min. Now only
-HIGH-risk flags (the ones getting a SAR draft anyway) get LLM polish; MEDIUM/LOW/NONE ship the template
-text. Added `tests/test_narrator.py` (4 tests) as part of this fix.
-
-`pytest tests/ -v` → **182/182 passing**, confirmed.
+### Also done in Phase 7
+- `run_demo.py` — starts backend + frontend together, opens the browser, clean Ctrl+C shutdown.
+- `.env.example` fixed: `AML_API_BASE_URL` (never read by anything) → `AML_API_URL` (what
+  `frontend/app.py` actually reads); `AML_USE_MOCKS` default flipped `1→0` now that real tools exist.
+- `requirements.txt`: added `kagglehub` (imported by `backend/tools/data_loader.py`, was missing — a
+  clean-clone install would have `ImportError`'d on the IBM loader path). Installed into `.venv` and
+  confirmed.
+- `README.md` and `ARCHITECTURE.md` written (see file list below).
+- 6 new tests locking in the above (2 in `test_intent.py`, 1 in `test_planner.py` rewritten, 2 in
+  `test_integration.py`, plus the doc-driven verification wasn't a separate test file).
 
 ### Immediate next action
-Open TRACK_A_ROADMAP.md **Phase 7**: harden all 10 demo queries end-to-end (real data), write
-`run_demo.py`, rehearse with the LLM key unset. `README.md`/`ARCHITECTURE.md` are also part of Phase 7
-and can be drafted now against real, verified pipeline behavior. **Still blocked/pending**: live LLM-key
-smoke test (Known Gaps #1) — do this the moment a Gemini/OpenAI key is available, ideally before Phase 7
-hardening leans on that path.
+No Track A phase work remains in the original 7-phase plan. Open items, none blocking:
+- **Live LLM-key smoke test** (Known Gaps #1) — still waiting on the user to obtain a
+  Gemini/OpenAI key. Do this before depending on the LLM path in an actual judged demo.
+- **Quantitative precision/recall/FP table** against the IBM label — flagged in README as "not yet done,"
+  arguably Track B's analytical work per WORKPLAN §6, not built here; ask before doing it.
+- Rehearsing the full demo script end-to-end 2-3 times before presenting (README's Setup section is the
+  closest thing to a script; no dedicated `DEMO_SCRIPT.md` from Track B seen yet as of this update).
 
 ---
 
@@ -68,7 +89,15 @@ hardening leans on that path.
       LLM entirely for MEDIUM/LOW/NONE flags — avoids one call per flag exhausting free-tier rate limits
       on a single multi-flag query. Added `tests/test_narrator.py` (4 tests, closing Known Gap #2 as a
       side effect). Full suite 182/182.
-- [ ] **Phase 7 — Hardening & demo prep.** Not started.
+- [x] **Phase 7 — Hardening & demo prep.** Found + fixed 3 real bugs while live-testing 11 demo queries
+      against real data (date anchored to wall-clock instead of dataset date — broke the brief's own
+      "last 30 days" example; entity regex too narrow for real alphanumeric IDs; `explain_flag` never
+      wired to any data source), plus 1 test-isolation bug found by the final verification step itself
+      (mock-dependent tests broke once a real `.env` existed on disk — see decision log #18). Wrote
+      `run_demo.py`, fixed `.env.example` (wrong var name, stale mocks default), added `kagglehub` to
+      `requirements.txt`, wrote `README.md` + `ARCHITECTURE.md`. 6 new tests + 2 hardened with an
+      explicit `force_mocks` fixture. Full suite 185/185, confirmed with a real `.env` present. Final live
+      verification through the actual HTTP API, not just Python-level calls.
 
 ---
 
@@ -82,33 +111,36 @@ hardening leans on that path.
 | `backend/tools/_mocks.py` | Complete — unchanged since Phase 0. `C-04521` is the pre-wired "obviously flagged" customer (structuring, R1, risk 78/high/report) — used as the default fixture across all tests |
 | `backend/agent/registry.py` | Complete — fixed in Phase 6: `TOOLS.clear()` + `importlib.reload()` on every call so `load_tools()` is deterministic in its requested mode regardless of prior calls in-process |
 | `backend/config.py` | Complete — unchanged since Phase 0 |
-| `backend/llm/client.py` | Complete — `complete_json()`, Gemini/OpenAI behind `settings.llm_provider`, returns `None` on any failure. **Not exercised against a real API key in this session** — only tested with it monkeypatched to return `None` (see Known Gaps) |
-| `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback (7 intents, dates, amounts, counts, entities, patterns, top_n). Regex fallback is the only path actually tested |
-| `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params now match Track B's *actual* tool signatures (fixed in Phase 6 — see roadmap for the 3 mismatches found), `tools_considered_but_skipped` populated |
-| `backend/agent/executor.py` | Complete — core loop, timing, error isolation, both re-planning branches, early-stop on empty filter result, Phase 6 additions (post-`risk_classify` entity scoping, ranking top-N truncation), and `_resolve_entities()` (post-Phase-6) — matches parser-normalized entity IDs to real `customer_id`s by numeric id after `load_data` runs, syncing already-built `entity_lookup` step params |
-| `backend/agent/narrator.py` | Complete — `_build_evidence()` (Phase 6) adapts Track B's raw evidence dicts into the frozen `Evidence` shape; template explanations from `.note`; **LLM polish now capped to HIGH-risk flags only** (post-Phase-6 fix — avoids one LLM call per flag burning free-tier rate limits on a single multi-flag query; untested against a real key, see Known Gaps #1); escalation mapping, SAR draft for HIGH |
-| `backend/main.py` | Complete — `/health`, `/query`, `/dataset/summary`, `/plan/{plan_id}` all live, verified against both mocks and real tools |
-| `requirements.txt`, `.gitignore`, `.env.example`, `CLAUDE.md` | Unchanged since Phase 0 |
+| `backend/llm/client.py` | Complete — `complete_json()`, Gemini/OpenAI behind `settings.llm_provider`, returns `None` on any failure. **Still not exercised against a real API key** — only tested with it monkeypatched to return `None` (see Known Gaps) |
+| `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback. **Phase 7 fixes**: entity regex now accepts real alphanumeric IDs (`[CT]-[A-Z0-9]{2,8}`, not just digits); relative dates anchor to the dataset's own max date (`_dataset_reference_date()`) instead of wall-clock `date.today()` |
+| `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params match Track B's actual tool signatures (Phase 6). **Phase 7 fix**: `explain_flag` now loads data and scores the entity fresh (deviates from Contract 4's original "reuse cached run" text, which was never wired to anything — documented inline) |
+| `backend/agent/executor.py` | Complete — core loop, timing, error isolation, re-planning branches, `_resolve_entities()` (post-Phase-6). **Phase 7 fix**: `_summarise()` now has dedicated, accurate messages for `explain_flag` and `eda` (previously fell through to a detection-flavoured generic message that didn't fit either) |
+| `backend/agent/narrator.py` | Complete — `_build_evidence()`, template explanations, LLM polish capped to HIGH-risk flags only (untested against a real key, see Known Gaps #1), escalation mapping, SAR draft for HIGH |
+| `backend/main.py` | Complete — `/health`, `/query`, `/dataset/summary`, `/plan/{plan_id}` all live, verified against both mocks and real tools, and against the real HTTP API with `AML_USE_MOCKS=0` |
+| `requirements.txt` | `kaggle` + `kagglehub` added (Phase 6 / Phase 7 respectively — `kagglehub` is what `data_loader.py` actually imports; missing before, would have `ImportError`'d on the IBM loader path on a clean clone) |
+| `.env.example` | **Phase 7 fix**: `AML_API_BASE_URL` (dead — nothing read it) → `AML_API_URL` (what `frontend/app.py` actually reads); `AML_USE_MOCKS` default `1→0` now that real tools exist |
+| `run_demo.py` | New (Phase 7) — starts backend + frontend together, opens browser, clean Ctrl+C shutdown |
+| `.gitignore`, `CLAUDE.md` | Unchanged since Phase 0 |
+| `README.md`, `ARCHITECTURE.md` | New (Phase 7) |
 
-### Tests (all passing — `pytest tests/ -v` → 182 passed)
+### Tests (all passing — `pytest tests/ -v` → 185 passed)
 | File | Count | Covers |
 |---|---|---|
-| `tests/test_intent.py` | 21 | 15 phrasing→intent cases (parametrized) + entity/date/amount/count/pattern/top_n extraction |
-| `tests/test_planner.py` | 8 | Plan-divergence assertions (all 3 brief-mandated queries), per-intent tool inclusion/exclusion, every step has a reason |
+| `tests/test_intent.py` | 23 | 15 phrasing→intent cases (parametrized) + entity/date/amount/count/pattern/top_n extraction + Phase 7 regressions: alphanumeric real-ID recognition, relative-date anchored to dataset not wall-clock |
+| `tests/test_planner.py` | 8 | Plan-divergence assertions (all 3 brief-mandated queries), per-intent tool inclusion/exclusion, every step has a reason, `explain_flag` now asserts it scores the entity (rewritten in Phase 7, was asserting the old broken behavior) |
 | `tests/test_executor.py` | 3 | Full end-to-end run on mocks, simulated tool failure isolation, entity-investigation scoping |
 | `tests/test_narrator.py` | 4 | LLM polish capped to HIGH-risk only, LLM-failure template fallback, SAR draft gating, escalation defaulting |
 | `tests/test_api.py` | 7 | `/health`, `/query` (3 divergence cases + flag shape), `/dataset/summary`, `/plan/{id}` hit + miss |
-| `tests/test_integration.py` | 10 | Real-data plan-divergence set (full_analysis, pattern_search scoping, threshold_query, entity_investigation, ranking, eda) + 3 entity-ID resolution tests (bare-number match, out-of-range no-match, real-ID passthrough) |
+| `tests/test_integration.py` | 11 | Real-data plan-divergence set + 3 entity-ID resolution tests + Phase 7's `explain_flag` real-data test (asserts it loads data, scores the right entity, skips eda/ml) |
 
-### Track B's files (now real, no longer just planned — for context, still not yours to edit)
+### Track B's files (now real — for context, still not yours to edit)
 `backend/tools/{data_loader,filters,eda,features,rules,ml_detect,aggregate,entity,risk}.py`,
 `data/generate_synthetic.py`, `data/sample/aml_sample.csv` (+ `aml_sample_customers.csv`), `DATA_CARD.md`,
-plus their own test files (`test_eda.py`, `test_features.py`, `test_filters.py`, `test_ml.py`,
-`test_rules.py` — 128 tests, all passing, not written by Track A). `frontend/**` and
-`AML_LOGIC.md`/`DEMO_SCRIPT.md` not yet seen as of this update.
-
-### Not yet written (Track A, Phase 7)
-`README.md`, `ARCHITECTURE.md`, `run_demo.py`.
+`AML_LOGIC.md`, `requirements-data.txt` (overlaps with `requirements.txt` — harmless duplication, not
+merged), plus their own test files (`test_eda.py`, `test_features.py`, `test_filters.py`, `test_ml.py`,
+`test_rules.py` — 128 tests, all passing, not written by Track A). `frontend/**` (fully built — 6 example
+query buttons, plan-trace panel, flag cards, FIXTURE-mode fallback when the API is down). No
+`DEMO_SCRIPT.md` seen yet as of this update.
 
 ---
 
@@ -141,6 +173,15 @@ plus their own test files (`test_eda.py`, `test_features.py`, `test_filters.py`,
    this project (single-process, no concurrent mock/real switching in production — `AML_USE_MOCKS` is set
    once at process start and never toggled at runtime), but if the server were ever made multi-worker or
    the mode toggled live, this would need a lock. Not in scope for a hackathon demo.
+7. **No quantitative precision/recall/false-positive table against the IBM `Is Laundering` label.**
+   `AML_LOGIC.md` §6 documents the *qualitative* false-positive-reduction argument; nobody has computed
+   actual numbers. README states this honestly rather than fabricating a table. This is arguably Track B's
+   analytical work per WORKPLAN §6 (H40-44) — ask before doing it, don't just build it.
+8. **Entity-ID resolution is still numeric-only** (see gap #5's resolution note) — Phase 7's regex fix
+   (accepting alphanumeric IDs like `C-STR02`) means a *typed* real ID always works precisely now; the
+   numeric-matching fallback for a *bare number* still can't disambiguate perfectly (multiple real IDs can
+   share a numeric suffix across prefixes — picks the first, logs it). Not fixed further; flagged as a
+   known limitation in README rather than over-engineered.
 
 ---
 
@@ -235,6 +276,44 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
     "high"` early-return before the `complete_json` call. Also wrote `tests/test_narrator.py` (4 tests) —
     this closes decision-log-adjacent Known Gap #2 (no narrator test file) as a side effect of this fix,
     not a separately-scoped task.
+14. **User confirmed Phase 7 could start now, independent of the still-pending LLM key test** — correct
+    read: Phase 7's own acceptance criterion is "rehearse with the LLM key unset," which is the state
+    we're already in. Before writing any docs, ran all 11 planned demo queries live against real data
+    first — this is what actually found the date-anchoring bug, the entity-regex bug, and confirmed
+    `explain_flag`'s brokenness, rather than discovering them after the README had already claimed they
+    worked. **Lesson reinforced**: for "hardening," running the real thing before writing about it caught
+    3 bugs that unit tests alone had not caught (the plan-divergence tests check *which tools ran*, not
+    *whether the answer was non-empty and correct* — both kinds of test are needed).
+15. **`explain_flag` fix asked as a question, not silently decided** — Contract 4's text explicitly
+    described "reuse a cached run," and changing that is a real design deviation, not just a bug fix, per
+    the file-ownership/behavior-change discipline this repo has followed throughout (see
+    `ANTI_HALLUCINATION_A.md` rule 13). User chose "make it actually work." The deviation is documented
+    inline in `planner.py`'s comment, not just here, so a future reader of the code (not just this log)
+    understands why the plan doesn't match the contract doc's literal words.
+16. **`.env.example`'s `AML_USE_MOCKS` default flipped `1→0`** as part of Phase 7, on the reasoning that
+    the template should reflect "how to actually run the demo" now that real tools exist, not "how Track A
+    developed in isolation before Track B's tools existed." This changes what a fresh `cp .env.example
+    .env` gives a new user — worth knowing if that surprises anyone expecting mocks-by-default.
+17. **`kagglehub` added to `requirements.txt`, distinct from Phase 6's `kaggle` addition.** Confirmed via
+    `grep` that `backend/tools/data_loader.py` imports `kagglehub` specifically (not the `kaggle` CLI
+    package), and that it was missing from `requirements.txt` (only present in Track B's separate,
+    non-canonical `requirements-data.txt`, which overlaps with but was never merged into the common file
+    per the Phase 0 decision override). Installed into `.venv` and confirmed importable before adding it,
+    not just added on the strength of the grep hit.
+18. **Found a real test-isolation bug via my own final verification step.** Created a real `.env`
+    (`AML_USE_MOCKS=0`) to boot-test the actual demo defaults end-to-end. This broke 6 previously-passing
+    tests in `test_api.py`/`test_executor.py` — they asserted against mock fixture data (`C-04521`, 5-row
+    fixture, `mocks: true`) but never *forced* mock mode; they just relied on `settings.aml_use_mocks`
+    defaulting to `True` in the absence of a `.env`. Once a real `.env` existed on disk, `Settings()`
+    (pydantic-settings, reads `.env` at import time) picked up `AML_USE_MOCKS=0`, and every test in those
+    two files silently ran against real tools instead of mocks. **Fixed properly, not worked around**:
+    added an `autouse` `force_mocks` fixture to both files (`monkeypatch.setattr(settings, "aml_use_mocks",
+    True)` + reset `executor._TOOLS_CACHE`), mirroring the `real_tools` fixture `test_integration.py`
+    already had for the opposite direction. **Lesson**: any test that asserts against mock-specific data
+    must force mock mode explicitly — never assume "no `.env` exists" as an implicit precondition, because
+    a working local `.env` is exactly what Phase 7 was trying to produce. The `.env` file itself is
+    gitignored and won't propagate to Track B or CI, but the test fragility it exposed was real and now
+    fixed regardless of whose machine has a `.env`.
 
 ---
 
@@ -243,10 +322,13 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
 1. Read this file top to bottom.
 2. Check `git log --oneline -5` to confirm nothing has changed since "Last updated" above — if it has,
    treat this file as stale until reconciled.
-3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 182/182-passing baseline still holds
-   before changing anything. If it's flaky or order-dependent again, suspect `backend/tools/base.py`'s
-   global `TOOLS` dict first (see decision log #10) before assuming new test code is wrong.
-4. Go to TRACK_A_ROADMAP.md, find "Current phase" above (Phase 7), and start there. Don't re-derive the
-   plan from WORKPLAN.md/CONTRACTS.md — unchanged, already reflected here.
+3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 185/185-passing baseline still holds
+   before changing anything. If it's flaky or order-dependent, suspect either `backend/tools/base.py`'s
+   global `TOOLS` dict (decision log #10) or ambient `.env`/`settings.aml_use_mocks` state leaking into
+   tests that assume mock mode without forcing it (decision log #18) before assuming new test code is wrong.
+4. All 7 phases are complete (see checklist above) — there is no "current phase" left in
+   TRACK_A_ROADMAP.md's original plan. Check this file's "Immediate next action" (top of file) for what's
+   actually outstanding — likely just the pending live LLM-key test, and possibly the quantitative
+   detection-quality table if the user asks for it.
 5. When you finish a subtask: check the box, update "Last updated"/"Current phase", append a Decision Log
    entry for anything not already specified in the ROADMAP.

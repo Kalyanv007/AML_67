@@ -53,10 +53,16 @@ def test_eda_intent_skips_all_detection():
         assert tool not in names
 
 
-def test_explain_flag_skips_reload_and_rescoring():
+def test_explain_flag_scores_the_entity_but_skips_eda_and_ml():
+    """explain_flag has no cached-run mechanism to reuse (see planner.py comment),
+    so it loads data fresh and scores just this entity — same shape as
+    entity_investigation, minus filter_data (no extra scoping implied)."""
     plan = build_plan(_intent("explain_flag", entities=["T-000123"]))
     names = _tool_names(plan)
-    assert "load_data" not in names
+    assert "load_data" in names
+    assert "entity_lookup" in names
+    assert "risk_classify" in names
+    assert "eda_profile" not in names
     assert "ml_detect" not in names
 
 

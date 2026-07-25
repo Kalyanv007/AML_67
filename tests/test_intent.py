@@ -1,3 +1,5 @@
+from datetime import date
+
 import pytest
 
 from backend.agent.intent_parser import parse_intent
@@ -44,10 +46,33 @@ def test_entity_extraction_prefixed_id():
     assert "C-01187" in result.entities
 
 
+def test_entity_extraction_alphanumeric_real_id():
+    """Real customer IDs aren't purely numeric (Track B's generator scheme:
+    C-STR02, C-N0001, C-HUB01, ...) — the entity regex must recognise these,
+    not just C-#####. Regression test for a bug found in Phase 7 hardening
+    where 'Is customer C-STR02 suspicious?' misclassified as full_analysis
+    because the ID failed to extract as an entity at all."""
+    result = parse_intent("Is customer C-STR02 suspicious?")
+    assert result.entities == ["C-STR02"]
+    assert result.intent == "entity_investigation"
+
+
 def test_date_filter_extraction():
     result = parse_intent("Find structuring patterns in the last 30 days")
     assert result.filters.date_from is not None
     assert result.filters.date_to is not None
+
+
+def test_relative_date_anchored_to_dataset_not_wallclock():
+    """'last 30 days' must resolve relative to the dataset's own max date
+    (2025-03-31 in the committed sample), not date.today() — regression test
+    for a bug found in Phase 7 hardening where this made the brief's own
+    example query ('Find structuring patterns in the last 30 days') return
+    zero results, since the real wall-clock date is nowhere near the
+    dataset's 2025 date range."""
+    result = parse_intent("Find structuring patterns in the last 30 days")
+    assert result.filters.date_to < date(2026, 1, 1)
+    assert result.filters.date_to != date.today()
 
 
 def test_amount_and_count_filters():

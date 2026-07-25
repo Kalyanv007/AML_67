@@ -1,6 +1,21 @@
+import pytest
+
+import backend.agent.executor as executor_mod
 from backend.agent.executor import _get_tools, run_plan
 from backend.agent.planner import build_plan
+from backend.config import settings
 from backend.schemas import QueryIntent
+
+
+@pytest.fixture(autouse=True)
+def force_mocks(monkeypatch):
+    """These tests assert against mock fixture data (C-04521, etc.) and must
+    not depend on ambient settings.aml_use_mocks (e.g. a real .env with
+    AML_USE_MOCKS=0 present for a local demo run) — force mock mode explicitly."""
+    monkeypatch.setattr(settings, "aml_use_mocks", True)
+    executor_mod._TOOLS_CACHE = None
+    yield
+    executor_mod._TOOLS_CACHE = None
 
 
 def _full_analysis_intent() -> QueryIntent:

@@ -181,9 +181,21 @@ def _summarise(intent: QueryIntent, response: AgentResponse) -> str:
             f = response.flags[0]
             return f"{entity} is flagged {f.risk_level} risk (score {f.risk_score:.0f}) — recommended action: {f.escalation}."
         return f"{entity} shows no flagged risk indicators in the current data."
+    if intent.intent == "explain_flag":
+        entity = intent.entities[0] if intent.entities else "the requested entity/transaction"
+        if n:
+            f = response.flags[0]
+            return f"{entity} was flagged {f.risk_level} risk (score {f.risk_score:.0f}): {f.explanation}"
+        return f"No active flag found for {entity} in the current data."
     if intent.intent == "threshold_query":
         count = response.metrics.get("row_count", n)
         return f"{count} customer(s) matched the specified threshold."
+    if intent.intent == "eda":
+        txn_count = response.metrics.get("txn_count")
+        cust_count = response.metrics.get("customer_count")
+        if txn_count is not None and cust_count is not None:
+            return f"Profiled {txn_count:,} transactions across {cust_count:,} customers — see the charts and metrics below."
+        return "Dataset profile ready — see the charts and metrics below."
     if n:
         return f"{n} entity(ies) flagged for review across the analysed data."
     return "No suspicious activity was flagged for this query."

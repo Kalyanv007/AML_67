@@ -102,11 +102,21 @@ def build_plan(intent: QueryIntent) -> ExecutionPlan:
         skip("risk_classify", "no detection requested")
 
     elif intent.intent == "explain_flag":
+        # NOTE: docs/CONTRACTS.md Contract 4 originally described this as "reuse a
+        # cached run" — that was never wired to anything (no mechanism connects an
+        # explain_flag query to a prior /query's plan_id), so it always returned
+        # empty. Changed to compute risk fresh for just this entity, same shape as
+        # entity_investigation, so the feature actually answers the question asked.
         entity_id = intent.entities[0] if intent.entities else None
-        add("entity_lookup", "look up the cached flag for this entity/transaction", entity_id=entity_id)
-        skip("load_data", "reusing a cached run instead of loading fresh data")
-        skip("eda_profile", "explaining an existing flag, not exploring")
-        skip("ml_detect", "explaining an existing flag, not re-scoring")
+        add("load_data", "load the working dataset — no cached run exists to reuse")
+        add("entity_lookup", "fetch the entity's profile and transaction summary", entity_id=entity_id)
+        add("feature_engineer", "compute features across the population (required for a comparable risk score)",
+            pattern_types=intent.pattern_types)
+        add("rule_detect", "check all entities against rule-based detectors; result is filtered to this entity after",
+            patterns=intent.pattern_types)
+        add("risk_classify", "compute risk scores; executor filters the result down to this entity")
+        skip("eda_profile", "explaining a flag, not exploring")
+        skip("ml_detect", "explaining an existing rule-based flag, not re-scoring")
 
     else:
         add("load_data", "unrecognised intent — falling back to full analysis on a sample")

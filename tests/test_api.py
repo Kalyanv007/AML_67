@@ -1,8 +1,24 @@
+import pytest
 from fastapi.testclient import TestClient
 
+import backend.agent.executor as executor_mod
+from backend.config import settings
 from backend.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def force_mocks(monkeypatch):
+    """These tests assert against the mock fixtures (C-04521, 5 rows, etc.) and
+    must not depend on whatever settings.aml_use_mocks happens to be set to in
+    the ambient environment (e.g. a real .env with AML_USE_MOCKS=0 for a local
+    demo run) — force it explicitly, same as test_integration.py does for the
+    opposite (real-tools) direction."""
+    monkeypatch.setattr(settings, "aml_use_mocks", True)
+    executor_mod._TOOLS_CACHE = None
+    yield
+    executor_mod._TOOLS_CACHE = None
 
 
 def test_health():
