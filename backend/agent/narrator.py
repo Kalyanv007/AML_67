@@ -121,6 +121,17 @@ def _explain(row: dict[str, Any], evidence: list[Evidence]) -> str:
         parts.append("Flagged for review based on the query's risk criteria.")
 
     text = " ".join(parts)
+
+    # LLM polish is capped to HIGH-risk flags only: a full_analysis run can
+    # produce dozens of flags, and one LLM call per flag would burn through a
+    # free-tier rate limit on a single query. HIGH-risk flags are the ones
+    # that matter most (they're the ones getting a SAR draft below) and are
+    # typically a small fraction of the total, so this keeps the "LLM adds
+    # value" story without the volume risk. MEDIUM/LOW/NONE ship the
+    # template text, which is already specific and accurate.
+    if row.get("risk_level") != "high":
+        return text
+
     polished = complete_json(
         f"Rewrite this AML compliance evidence into one clear analyst-facing paragraph. "
         f"Use only the facts given, never invent numbers: {text}",

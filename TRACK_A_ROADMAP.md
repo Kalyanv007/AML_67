@@ -307,6 +307,27 @@ match, out-of-range no-match, real-ID passthrough). Full suite: **178/178 passin
 
 ---
 
+## Standalone fix — LLM call volume capped to HIGH-risk flags ✅ DONE
+
+Also not part of any phase's original scope — surfaced while discussing (before starting Phase 7) whether
+a free-tier LLM key would hold up in a demo. It wouldn't have: `narrator._explain()` called the LLM once
+per flag with no cap, so a 30-flag `full_analysis` result meant 30 calls for a single query — well past
+Gemini free tier's ~15 req/min. Every one of those calls would have silently fallen back to template text
+anyway on rate-limit failure, just burning quota and adding latency for nothing.
+
+Fixed with a one-line early return in `_explain()`: `if row.get("risk_level") != "high": return text` —
+only HIGH-risk flags (the ones already getting a `sar_draft`) get LLM polish; MEDIUM/LOW/NONE ship the
+already-accurate template text. Added `tests/test_narrator.py` (4 tests: LLM called exactly once across a
+4-flag mixed-risk batch, LLM-failure fallback, SAR-draft gating, escalation defaulting) — this also closes
+the "no narrator test file" gap that had been open since Phase 4, as a side effect rather than separately
+scoped work. Full suite: **182/182 passing**.
+
+**Still open**: the LLM path itself (both `intent_parser.py` and this capped `narrator.py` path) has never
+been run against a real API key — user doesn't have one yet. Do a live smoke test the moment a
+Gemini/OpenAI key is available, before leaning on that path in a Phase 7 demo rehearsal.
+
+---
+
 ## Phase 7 — Hardening & Demo Prep
 
 - Every demo query has a graceful, specific answer for the empty-result case.

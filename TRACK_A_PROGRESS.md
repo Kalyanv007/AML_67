@@ -6,38 +6,40 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-25, post-Phase-6 — entity-ID resolution fix landed as its own unit of work.
+**Last updated:** 2026-07-25, post-Phase-6 — two standalone fixes landed: entity-ID resolution and
+LLM-call-volume capping. Phase 7 not started.
 
 ---
 
 ## Where we are right now
 
-**Phases 0–6 done, plus one standalone fix layered on top (entity-ID resolution). Phase 7 (hardening &
-demo prep) not started.** Track B pushed their real tools (`data_loader`, `filters`, `eda`, `features`,
-`rules`, `ml_detect`, `aggregate`, `entity`, `risk`) and the real sample dataset (2,002 transactions, 270
+**Phases 0–6 done, plus two standalone fixes layered on top. Phase 7 (hardening & demo prep) not
+started.** Track B pushed their real tools (`data_loader`, `filters`, `eda`, `features`, `rules`,
+`ml_detect`, `aggregate`, `entity`, `risk`) and the real sample dataset (2,002 transactions, 270
 customers) between sessions. Phase 6 integration against them found and fixed 5 real bugs — full
 root-cause narrative in TRACK_A_ROADMAP.md Phase 6.
 
-**Entity-ID resolution (post-Phase-6, user-requested as its own task):** the real dataset's customer IDs
-follow Track B's generator's own scheme (`C-N0001`, `C-STR02`, `C-HUB01`, ...), not simple zero-padded
-numbers, so the parser's normalization of a bare number ("4521" → `C-04521`) never matched a real record.
-Fixed in `executor.py`: right after `load_data` populates `ctx.customers`, `_resolve_entities()` matches
-each unresolved entity against real `customer_id`s **by numeric id** (strip non-digits, compare as int —
-not naive substring matching, which would false-positive on short numbers), picks the first candidate on
-ambiguity (logged), and leaves genuinely out-of-range numbers unresolved (graceful no-match, unchanged
-from before). The resolved ID propagates into `intent.entities` and into any already-built
-`entity_lookup` step's params (built at plan time, before resolution can run). **Found and fixed a real
-bug while adding this**: the resolution notes were only logged to `plan.decisions` when the entity list
-actually changed — meaning the "no real customer found" message silently vanished for the no-match case.
-Fixed by always logging notes and re-syncing params, unconditionally.
+**Fix 1 — entity-ID resolution** (`executor.py`): real customer IDs (`C-N0001`, `C-STR02`, ...) don't
+match the parser's numeric normalization of a bare number ("4521" → `C-04521`). `_resolve_entities()`
+matches by numeric id (not substring, to avoid false-positives on short numbers) right after `load_data`
+runs, propagating the resolved ID into `intent.entities` and any already-built `entity_lookup` step.
+Caught and fixed a real bug in the process: resolution notes were only logged when the entity list
+actually changed, silently dropping the "no match" explanation.
 
-`pytest tests/ -v` → **178/178 passing** (175 from Phase 6 + 3 new entity-resolution tests in
-`tests/test_integration.py`), confirmed after the decisions-logging bug was caught and fixed.
+**Fix 2 — LLM call volume capped to HIGH-risk flags** (`narrator.py`): while discussing whether a free-tier
+LLM key would be sufficient, found that `_explain()` called the LLM once *per flag* — a 30-flag
+`full_analysis` result meant 30 calls for one query, well past Gemini free tier's ~15 req/min. Now only
+HIGH-risk flags (the ones getting a SAR draft anyway) get LLM polish; MEDIUM/LOW/NONE ship the template
+text. Added `tests/test_narrator.py` (4 tests) as part of this fix.
+
+`pytest tests/ -v` → **182/182 passing**, confirmed.
 
 ### Immediate next action
 Open TRACK_A_ROADMAP.md **Phase 7**: harden all 10 demo queries end-to-end (real data), write
 `run_demo.py`, rehearse with the LLM key unset. `README.md`/`ARCHITECTURE.md` are also part of Phase 7
-and can be drafted now against real, verified pipeline behavior.
+and can be drafted now against real, verified pipeline behavior. **Still blocked/pending**: live LLM-key
+smoke test (Known Gaps #1) — do this the moment a Gemini/OpenAI key is available, ideally before Phase 7
+hardening leans on that path.
 
 ---
 
@@ -62,6 +64,10 @@ and can be drafted now against real, verified pipeline behavior.
 - [x] **Post-Phase-6 fix — Entity-ID resolution.** `_resolve_entities()` in `executor.py` matches
       parser-normalized IDs to real customer IDs by numeric id. 3 tests passing. Caught and fixed a
       decisions-logging bug in the process (see decision log). Full suite 178/178.
+- [x] **Post-Phase-6 fix — LLM call volume capped to HIGH-risk flags.** `narrator._explain()` skips the
+      LLM entirely for MEDIUM/LOW/NONE flags — avoids one call per flag exhausting free-tier rate limits
+      on a single multi-flag query. Added `tests/test_narrator.py` (4 tests, closing Known Gap #2 as a
+      side effect). Full suite 182/182.
 - [ ] **Phase 7 — Hardening & demo prep.** Not started.
 
 ---
@@ -80,16 +86,17 @@ and can be drafted now against real, verified pipeline behavior.
 | `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback (7 intents, dates, amounts, counts, entities, patterns, top_n). Regex fallback is the only path actually tested |
 | `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params now match Track B's *actual* tool signatures (fixed in Phase 6 — see roadmap for the 3 mismatches found), `tools_considered_but_skipped` populated |
 | `backend/agent/executor.py` | Complete — core loop, timing, error isolation, both re-planning branches, early-stop on empty filter result, Phase 6 additions (post-`risk_classify` entity scoping, ranking top-N truncation), and `_resolve_entities()` (post-Phase-6) — matches parser-normalized entity IDs to real `customer_id`s by numeric id after `load_data` runs, syncing already-built `entity_lookup` step params |
-| `backend/agent/narrator.py` | Complete — `_build_evidence()` (added Phase 6) adapts Track B's rule-specific raw evidence dicts into the frozen `Evidence` shape; template explanations from `.note`, optional LLM polish (untested against a real key), escalation mapping, SAR draft for HIGH |
+| `backend/agent/narrator.py` | Complete — `_build_evidence()` (Phase 6) adapts Track B's raw evidence dicts into the frozen `Evidence` shape; template explanations from `.note`; **LLM polish now capped to HIGH-risk flags only** (post-Phase-6 fix — avoids one LLM call per flag burning free-tier rate limits on a single multi-flag query; untested against a real key, see Known Gaps #1); escalation mapping, SAR draft for HIGH |
 | `backend/main.py` | Complete — `/health`, `/query`, `/dataset/summary`, `/plan/{plan_id}` all live, verified against both mocks and real tools |
 | `requirements.txt`, `.gitignore`, `.env.example`, `CLAUDE.md` | Unchanged since Phase 0 |
 
-### Tests (all passing — `pytest tests/ -v` → 178 passed)
+### Tests (all passing — `pytest tests/ -v` → 182 passed)
 | File | Count | Covers |
 |---|---|---|
 | `tests/test_intent.py` | 21 | 15 phrasing→intent cases (parametrized) + entity/date/amount/count/pattern/top_n extraction |
 | `tests/test_planner.py` | 8 | Plan-divergence assertions (all 3 brief-mandated queries), per-intent tool inclusion/exclusion, every step has a reason |
 | `tests/test_executor.py` | 3 | Full end-to-end run on mocks, simulated tool failure isolation, entity-investigation scoping |
+| `tests/test_narrator.py` | 4 | LLM polish capped to HIGH-risk only, LLM-failure template fallback, SAR draft gating, escalation defaulting |
 | `tests/test_api.py` | 7 | `/health`, `/query` (3 divergence cases + flag shape), `/dataset/summary`, `/plan/{id}` hit + miss |
 | `tests/test_integration.py` | 10 | Real-data plan-divergence set (full_analysis, pattern_search scoping, threshold_query, entity_investigation, ranking, eda) + 3 entity-ID resolution tests (bare-number match, out-of-range no-match, real-ID passthrough) |
 
@@ -107,15 +114,15 @@ plus their own test files (`test_eda.py`, `test_features.py`, `test_filters.py`,
 
 ## Known gaps / honest caveats (don't assume these are solved)
 
-1. **The LLM path has never actually been called.** Every test stubs `complete_json` to return `None`
-   (no API key is set in `.env`). The regex fallback is what's actually verified working. If/when a real
-   `GEMINI_API_KEY` or `OPENAI_API_KEY` is added, do a manual smoke test of `parse_intent()` and
-   `narrator._explain()` against the real API before trusting that path in a demo — the JSON-parsing and
-   prompt-following behaviour of a live model is the one thing that couldn't be tested here.
-2. **No `tests/test_narrator.py`.** Narrator logic is only exercised indirectly through executor/API
-   tests using the one mock risk row (`C-04521`, rule `R1`). Untested paths: multiple triggered rules on
-   one entity, an ML-only flag with no rule hit, LOW/MEDIUM/NONE risk levels (mock only ever produces
-   HIGH). Low risk given it's simple template code, but worth a direct test file if time allows.
+1. **The LLM path has never actually been called against a real key.** Still true — user doesn't have a
+   Gemini/OpenAI key yet. Every test stubs `complete_json` to return `None`. **Blocked, not forgotten**:
+   do a manual smoke test of `parse_intent()` and `narrator._explain()` against the real API the moment a
+   key is available, before trusting that path in a demo — JSON-parsing and prompt-following behaviour of
+   a live model is the one thing that can't be verified without one.
+2. ~~No `tests/test_narrator.py`~~ — **resolved**: added, 4 tests. Covers the HIGH-risk-only LLM-polish
+   cap (below), LLM-failure fallback, SAR draft gating, escalation defaulting. Multi-rule-per-entity and
+   ML-only-flag explanation paths still untested directly, but low risk (simple template code, same
+   pattern already proven for the single-rule case).
 3. **`/dataset/summary` re-calls `registry.load_tools()` on every request** instead of reusing
    `executor._get_tools()`'s cache. Harmless for a hackathon's traffic volume; would be worth sharing the
    cache if this were long-lived. *(Now also re-runs `TOOLS.clear()` + reload every call after the Phase 6
@@ -217,6 +224,17 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
     work in this file**: when a helper returns "notes to log" alongside "the actual result," don't
     conditionally gate the logging on whether the result changed — the notes are often most valuable
     exactly when nothing changed (the "why not" case).
+13. **User asked, before starting Phase 7, whether to test with a real LLM key now or later, whether free
+    tier would be enough, and when to address Known Gaps.** Recommended testing now (standalone, cheap,
+    de-risks Phase 7) but deferred pending the user getting a key — not blocked on me. While reasoning
+    through "will free tier be enough," found a real design problem, not just a hypothetical one:
+    `narrator._explain()` was calling the LLM once per flag, so a 30-flag `full_analysis` result meant 30
+    LLM calls for a single query — well past Gemini free tier's ~15 req/min. User chose to cap LLM polish
+    to HIGH-risk flags only (cheapest fix, keeps the "LLM adds value" story where it matters most — HIGH
+    flags are also the ones getting a SAR draft). Implemented in `_explain()`: a `row.get("risk_level") !=
+    "high"` early-return before the `complete_json` call. Also wrote `tests/test_narrator.py` (4 tests) —
+    this closes decision-log-adjacent Known Gap #2 (no narrator test file) as a side effect of this fix,
+    not a separately-scoped task.
 
 ---
 
@@ -225,7 +243,7 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
 1. Read this file top to bottom.
 2. Check `git log --oneline -5` to confirm nothing has changed since "Last updated" above — if it has,
    treat this file as stale until reconciled.
-3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 178/178-passing baseline still holds
+3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 182/182-passing baseline still holds
    before changing anything. If it's flaky or order-dependent again, suspect `backend/tools/base.py`'s
    global `TOOLS` dict first (see decision log #10) before assuming new test code is wrong.
 4. Go to TRACK_A_ROADMAP.md, find "Current phase" above (Phase 7), and start there. Don't re-derive the
