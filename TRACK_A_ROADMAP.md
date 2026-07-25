@@ -288,6 +288,25 @@ Goal (reference, already met): flip `AML_USE_MOCKS=0`, same pipeline, real data 
 
 ---
 
+## Standalone fix — Entity-ID resolution ✅ DONE
+
+Not part of Phase 6's original scope (deliberately deferred, then requested separately once Phase 6 was
+pushed) — recorded as its own item so it doesn't get conflated with either phase.
+
+Real customer IDs (`C-N0001`, `C-STR02`, ...) don't match the parser's numeric normalization of a bare
+number ("4521" → `C-04521`). Added `_resolve_entities()` in `executor.py`: after `load_data` populates
+`ctx.customers`, matches unresolved entities against real `customer_id`s by numeric id (digit-only,
+integer comparison — not substring, which false-positives on short numbers), takes the first candidate on
+ambiguity (logged to `plan.decisions`), and re-syncs the already-plan-built `entity_lookup` step's
+`entity_id` param. Leaves genuinely out-of-range numbers unresolved — same graceful no-match as before.
+
+Caught a real bug while testing it: resolution notes were only logged when the entity list actually
+changed, so the "no real customer found" message silently disappeared for the no-match case. Fixed by
+always logging, unconditionally. `tests/test_integration.py` — 3 new tests (bare-number match, ambiguous
+match, out-of-range no-match, real-ID passthrough). Full suite: **178/178 passing**.
+
+---
+
 ## Phase 7 — Hardening & Demo Prep
 
 - Every demo query has a graceful, specific answer for the empty-result case.

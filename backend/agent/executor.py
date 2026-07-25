@@ -9,6 +9,7 @@ performs the conditional re-planning specified in docs/CONTRACTS.md Contract 4:
   - filter_data returns 0 rows -> stop early with an explanatory summary
 """
 
+import re
 import time
 from typing import Any
 
@@ -71,6 +72,17 @@ def run_plan(intent: QueryIntent, plan: ExecutionPlan) -> AgentResponse:
         response.metrics.update(result.metrics)
         plan.decisions.extend(result.notes)
 
+        if step.tool == "load_data" and ctx.customers is not None and intent.entities:
+            resolved, resolve_notes = _resolve_entities(intent.entities, ctx.customers)
+            # always log resolve_notes (even the no-match case) and keep entity_lookup's
+            # already-built params in sync — not just when resolved != intent.entities,
+            # since an unmatched entity still produced a note worth surfacing
+            intent.entities = resolved
+            plan.decisions.extend(resolve_notes)
+            for later in steps[i + 1:]:
+                if later.tool == "entity_lookup" and "entity_id" in later.params:
+                    later.params["entity_id"] = intent.entities[0] if intent.entities else None
+
         if step.tool == "filter_data" and ctx.df is not None:
             if len(ctx.df) == 0:
                 plan.decisions.append("filter_data returned 0 rows — stopping execution early")
@@ -113,6 +125,52 @@ def run_plan(intent: QueryIntent, plan: ExecutionPlan) -> AgentResponse:
         response.summary = _summarise(intent, response)
     plan.steps = steps
     return response
+
+
+def _resolve_entities(entities: list[str], customers: Any) -> tuple[list[str], list[str]]:
+    """Best-effort resolution of parser-normalised entity IDs against the real
+    customer_id values in the loaded dataset.
+
+    intent_parser normalises a bare number in a query (e.g. "4521") into
+    "C-04521" (docs/CONTRACTS.md Contract 0's stated convention), but real
+    customer IDs follow the data generator's own scheme (e.g. "C-STR02",
+    "C-N0001"), so that normalised ID never exact-matches a real record.
+    Falls back to leaving an entity unresolved (matches nothing downstream —
+    the same graceful "not found" behaviour as before this fix) when no real
+    customer shares its numeric id.
+    """
+    if customers is None or "customer_id" not in getattr(customers, "columns", []):
+        return entities, []
+
+    real_ids = customers["customer_id"].astype(str).tolist()
+    real_id_set = set(real_ids)
+    resolved: list[str] = []
+    notes: list[str] = []
+
+    for entity in entities:
+        if entity in real_id_set:
+            resolved.append(entity)
+            continue
+
+        digits = re.sub(r"\D", "", entity)
+        entity_num = int(digits) if digits else None
+        candidates = []
+        if entity_num is not None:
+            for rid in real_ids:
+                rid_digits = re.sub(r"\D", "", rid)
+                if rid_digits and int(rid_digits) == entity_num:
+                    candidates.append(rid)
+
+        if candidates:
+            match = candidates[0]
+            resolved.append(match)
+            extra = f" ({len(candidates)} candidates shared numeric id {entity_num}, used first)" if len(candidates) > 1 else ""
+            notes.append(f"resolved entity '{entity}' to real customer '{match}' by numeric id{extra}")
+        else:
+            resolved.append(entity)
+            notes.append(f"no real customer found matching '{entity}' — proceeding with original id (no match expected)")
+
+    return resolved, notes
 
 
 def _summarise(intent: QueryIntent, response: AgentResponse) -> str:

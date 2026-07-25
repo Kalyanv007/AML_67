@@ -83,6 +83,49 @@ def test_entity_investigation_scopes_to_one_entity(real_tools):
     assert response.flags[0].explanation
 
 
+def test_entity_resolution_maps_bare_number_to_real_customer(real_tools):
+    """intent_parser normalises 'customer 2' -> 'C-00002', which doesn't exist
+    in the real dataset (real IDs are e.g. C-N0002). The executor should
+    resolve it by numeric id to a real customer_id, not just fail to match."""
+    intent = QueryIntent(raw_query="Is customer 2 suspicious?", intent="entity_investigation",
+                          entities=["C-00002"], parsed_by="rules", confidence=0.9)
+    plan = build_plan(intent)
+    response = run_plan(intent, plan)
+
+    assert all(s.status == "ok" for s in plan.steps)
+    assert intent.entities != ["C-00002"], "entity should have been resolved to a real customer_id"
+    assert intent.entities[0].startswith("C-") and intent.entities[0] != "C-00002"
+    assert any("resolved entity" in d for d in plan.decisions)
+    entity_lookup_step = next(s for s in plan.steps if s.tool == "entity_lookup")
+    assert entity_lookup_step.params["entity_id"] == intent.entities[0]
+
+
+def test_entity_resolution_leaves_out_of_range_id_unresolved(real_tools):
+    """A number with no real counterpart (out of the ~270-customer range)
+    should degrade gracefully — no crash, no flags, not silently matched to
+    the wrong customer."""
+    intent = QueryIntent(raw_query="Is customer 4521 suspicious?", intent="entity_investigation",
+                          entities=["C-04521"], parsed_by="rules", confidence=0.9)
+    plan = build_plan(intent)
+    response = run_plan(intent, plan)
+
+    assert all(s.status == "ok" for s in plan.steps)
+    assert intent.entities == ["C-04521"]
+    assert response.flags == []
+    assert any("no real customer found" in d for d in plan.decisions)
+
+
+def test_entity_resolution_passes_through_already_real_id(real_tools):
+    intent = QueryIntent(raw_query=f"Is customer {REAL_STRUCTURING_ENTITY} suspicious?",
+                          intent="entity_investigation", entities=[REAL_STRUCTURING_ENTITY],
+                          parsed_by="rules", confidence=0.9)
+    plan = build_plan(intent)
+    run_plan(intent, plan)
+
+    assert intent.entities == [REAL_STRUCTURING_ENTITY]
+    assert not any("resolved entity" in d for d in plan.decisions)
+
+
 def test_entity_investigation_unknown_id_returns_no_flags_not_a_crash(real_tools):
     intent = QueryIntent(raw_query="Is customer 4521 suspicious?", intent="entity_investigation",
                           entities=["C-04521"], parsed_by="rules", confidence=0.9)

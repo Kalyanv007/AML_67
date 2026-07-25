@@ -6,39 +6,38 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-25, end of Phase 6 — integrated against Track B's real tools and real data.
+**Last updated:** 2026-07-25, post-Phase-6 — entity-ID resolution fix landed as its own unit of work.
 
 ---
 
 ## Where we are right now
 
-**Phases 0–6 done. Phase 7 (hardening & demo prep) not started.** Track B pushed their real tools
-(`data_loader`, `filters`, `eda`, `features`, `rules`, `ml_detect`, `aggregate`, `entity`, `risk`) and the
-real sample dataset (2,002 transactions, 270 customers) between sessions. Integration against them found
-and fixed **5 real bugs** — 4 in Track A's own planner/executor/narrator (param-name mismatches against
-what the real tools actually expect, an evidence-shape assumption that didn't hold, missing entity/top-N
-scoping), and 1 in the tool registry itself (a global-dict staleness bug that only manifested when
-switching between mock and real mode within one process — i.e., across a test session, not in normal
-single-mode operation). Full detail and root-cause narrative in TRACK_A_ROADMAP.md Phase 6.
+**Phases 0–6 done, plus one standalone fix layered on top (entity-ID resolution). Phase 7 (hardening &
+demo prep) not started.** Track B pushed their real tools (`data_loader`, `filters`, `eda`, `features`,
+`rules`, `ml_detect`, `aggregate`, `entity`, `risk`) and the real sample dataset (2,002 transactions, 270
+customers) between sessions. Phase 6 integration against them found and fixed 5 real bugs — full
+root-cause narrative in TRACK_A_ROADMAP.md Phase 6.
 
-`pytest tests/ -v` → **175/175 passing** (168 from Phases 0–5 + 7 new in `tests/test_integration.py`),
-confirmed stable across three different file/test orderings — the registry bug was order-sensitive, so
-re-running under different orderings was the actual verification, not just one green run.
+**Entity-ID resolution (post-Phase-6, user-requested as its own task):** the real dataset's customer IDs
+follow Track B's generator's own scheme (`C-N0001`, `C-STR02`, `C-HUB01`, ...), not simple zero-padded
+numbers, so the parser's normalization of a bare number ("4521" → `C-04521`) never matched a real record.
+Fixed in `executor.py`: right after `load_data` populates `ctx.customers`, `_resolve_entities()` matches
+each unresolved entity against real `customer_id`s **by numeric id** (strip non-digits, compare as int —
+not naive substring matching, which would false-positive on short numbers), picks the first candidate on
+ambiguity (logged), and leaves genuinely out-of-range numbers unresolved (graceful no-match, unchanged
+from before). The resolved ID propagates into `intent.entities` and into any already-built
+`entity_lookup` step's params (built at plan time, before resolution can run). **Found and fixed a real
+bug while adding this**: the resolution notes were only logged to `plan.decisions` when the entity list
+actually changed — meaning the "no real customer found" message silently vanished for the no-match case.
+Fixed by always logging notes and re-syncing params, unconditionally.
+
+`pytest tests/ -v` → **178/178 passing** (175 from Phase 6 + 3 new entity-resolution tests in
+`tests/test_integration.py`), confirmed after the decisions-logging bug was caught and fixed.
 
 ### Immediate next action
-Open TRACK_A_ROADMAP.md **Phase 7**: harden all 10 demo queries end-to-end (real data, not just the 5
-tested so far), write `run_demo.py`, rehearse with the LLM key unset. `README.md`/`ARCHITECTURE.md` are
-also part of Phase 7 and can be drafted now against real, verified pipeline behavior.
-
-### Known correctness caveat to carry into Phase 7 (not a bug, but worth designing around)
-The real dataset's customer IDs follow Track B's synthetic generator's own scheme (`C-N0001`,
-`C-STR02`, `C-HUB01`, ...), not simple zero-padded numbers. The intent parser normalizes a bare number
-like "4521" to `C-04521` (per `docs/CONTRACTS.md` Contract 0's stated convention), which will never match
-a real record — confirmed live: `entity_investigation` on a nonexistent ID degrades gracefully (0 flags,
-sensible summary, no crash) rather than erroring, so it's not broken, but a user typing a plausible-looking
-number will always get "no risk indicators found" against the real data. This is a demo-data / UX
-consideration (how would a user ever know or guess `C-STR02`?), not something to silently patch — flag it
-to the user before Phase 7 demo-query work assumes numeric IDs work end-to-end.
+Open TRACK_A_ROADMAP.md **Phase 7**: harden all 10 demo queries end-to-end (real data), write
+`run_demo.py`, rehearse with the LLM key unset. `README.md`/`ARCHITECTURE.md` are also part of Phase 7
+and can be drafted now against real, verified pipeline behavior.
 
 ---
 
@@ -60,6 +59,9 @@ to the user before Phase 7 demo-query work assumes numeric IDs work end-to-end.
       crash, 3 planner param-name mismatches, missing entity/top-N scoping in executor, a registry
       global-state bug). 7 tests passing (`tests/test_integration.py`), plus manual verification against
       the real 2,002-row dataset. Full suite 175/175, stable across 3 orderings.
+- [x] **Post-Phase-6 fix — Entity-ID resolution.** `_resolve_entities()` in `executor.py` matches
+      parser-normalized IDs to real customer IDs by numeric id. 3 tests passing. Caught and fixed a
+      decisions-logging bug in the process (see decision log). Full suite 178/178.
 - [ ] **Phase 7 — Hardening & demo prep.** Not started.
 
 ---
@@ -77,19 +79,19 @@ to the user before Phase 7 demo-query work assumes numeric IDs work end-to-end.
 | `backend/llm/client.py` | Complete — `complete_json()`, Gemini/OpenAI behind `settings.llm_provider`, returns `None` on any failure. **Not exercised against a real API key in this session** — only tested with it monkeypatched to return `None` (see Known Gaps) |
 | `backend/agent/intent_parser.py` | Complete — LLM-first + full regex fallback (7 intents, dates, amounts, counts, entities, patterns, top_n). Regex fallback is the only path actually tested |
 | `backend/agent/planner.py` | Complete — intent → plan mapping matches Contract 4; params now match Track B's *actual* tool signatures (fixed in Phase 6 — see roadmap for the 3 mismatches found), `tools_considered_but_skipped` populated |
-| `backend/agent/executor.py` | Complete — core loop, timing, error isolation, both re-planning branches, early-stop on empty filter result, plus Phase 6 additions: post-`risk_classify` entity scoping and ranking top-N truncation |
+| `backend/agent/executor.py` | Complete — core loop, timing, error isolation, both re-planning branches, early-stop on empty filter result, Phase 6 additions (post-`risk_classify` entity scoping, ranking top-N truncation), and `_resolve_entities()` (post-Phase-6) — matches parser-normalized entity IDs to real `customer_id`s by numeric id after `load_data` runs, syncing already-built `entity_lookup` step params |
 | `backend/agent/narrator.py` | Complete — `_build_evidence()` (added Phase 6) adapts Track B's rule-specific raw evidence dicts into the frozen `Evidence` shape; template explanations from `.note`, optional LLM polish (untested against a real key), escalation mapping, SAR draft for HIGH |
 | `backend/main.py` | Complete — `/health`, `/query`, `/dataset/summary`, `/plan/{plan_id}` all live, verified against both mocks and real tools |
 | `requirements.txt`, `.gitignore`, `.env.example`, `CLAUDE.md` | Unchanged since Phase 0 |
 
-### Tests (all passing — `pytest tests/ -v` → 175 passed, 168 Track A + Track B combined from Phase 5, +7 new)
+### Tests (all passing — `pytest tests/ -v` → 178 passed)
 | File | Count | Covers |
 |---|---|---|
 | `tests/test_intent.py` | 21 | 15 phrasing→intent cases (parametrized) + entity/date/amount/count/pattern/top_n extraction |
 | `tests/test_planner.py` | 8 | Plan-divergence assertions (all 3 brief-mandated queries), per-intent tool inclusion/exclusion, every step has a reason |
 | `tests/test_executor.py` | 3 | Full end-to-end run on mocks, simulated tool failure isolation, entity-investigation scoping |
 | `tests/test_api.py` | 7 | `/health`, `/query` (3 divergence cases + flag shape), `/dataset/summary`, `/plan/{id}` hit + miss |
-| `tests/test_integration.py` | 7 | Same plan-divergence set but against real tools + real data: full_analysis, pattern_search feature/rule scoping, threshold_query, entity_investigation (real ID + nonexistent ID), ranking top-N, eda |
+| `tests/test_integration.py` | 10 | Real-data plan-divergence set (full_analysis, pattern_search scoping, threshold_query, entity_investigation, ranking, eda) + 3 entity-ID resolution tests (bare-number match, out-of-range no-match, real-ID passthrough) |
 
 ### Track B's files (now real, no longer just planned — for context, still not yours to edit)
 `backend/tools/{data_loader,filters,eda,features,rules,ml_detect,aggregate,entity,risk}.py`,
@@ -124,9 +126,10 @@ plus their own test files (`test_eda.py`, `test_features.py`, `test_filters.py`,
    and <50-rows→drop-ml_detect branches specifically are *still* only proven against mocks, though — no
    real-data test forces either condition. Low priority (logic is simple and shared, not per-tool) but
    flagging so it isn't assumed covered.
-5. **Real customer IDs don't match the parser's numeric-ID normalization scheme** — see "Known correctness
-   caveat" at the top of this file. Not a bug, but will affect any Phase 7 demo query that references a
-   customer by a plain number.
+5. ~~Real customer IDs don't match the parser's numeric-ID normalization scheme~~ — **fixed post-Phase-6**
+   via `_resolve_entities()` in `executor.py`. Remaining limitation: resolution is by *numeric id only*
+   (strip non-digits, compare as int), so it can't help with non-numeric queries like "the customer named
+   Acme Corp" — that would need a name-lookup path, not built and not requested.
 6. **The registry fix (`TOOLS.clear()` + `importlib.reload()`) is untested for thread-safety.** Fine for
    this project (single-process, no concurrent mock/real switching in production — `AML_USE_MOCKS` is set
    once at process start and never toggled at runtime), but if the server were ever made multi-worker or
@@ -199,6 +202,21 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
    `importlib.reload()`-ing on every `load_tools()` call. If a future contract change moves tool
    registration to a different mechanism, re-verify this class of bug doesn't reappear — the underlying
    risk (decorators only run once per process) is inherent to the `@tool` pattern, not just this bug.
+11. **Entity-ID resolution built as a standalone task, explicitly not bundled into Phase 7.** User chose
+    to push Phase 6 first (correct call — the ID gap degrades gracefully, not a Phase 6 blocker), then
+    asked for this fix specifically afterward. Implemented in `executor.py`: `_resolve_entities()` matches
+    by numeric id (digits-only, int comparison) rather than substring, to avoid short numbers
+    false-matching many IDs. On ambiguity (multiple real customers sharing a numeric id — happened for
+    "2", 6 candidates across different ID prefixes), picks the first deterministically and logs it.
+12. **Caught a real bug while testing decision 11**: the resolution notes (`resolve_notes`, including the
+    "no real customer found" message) were only appended to `plan.decisions` inside the
+    `if resolved != intent.entities:` branch — meaning the no-match case silently dropped its own
+    explanatory note, even though `_resolve_entities()` correctly computed it. A test written for exactly
+    this case (`test_entity_resolution_leaves_out_of_range_id_unresolved`) caught it immediately. Fixed by
+    always appending notes and re-syncing `entity_lookup` params, unconditionally. **Lesson for future
+    work in this file**: when a helper returns "notes to log" alongside "the actual result," don't
+    conditionally gate the logging on whether the result changed — the notes are often most valuable
+    exactly when nothing changed (the "why not" case).
 
 ---
 
@@ -207,7 +225,7 @@ Keep this append-only, most recent last. Each entry: what was decided, why, and 
 1. Read this file top to bottom.
 2. Check `git log --oneline -5` to confirm nothing has changed since "Last updated" above — if it has,
    treat this file as stale until reconciled.
-3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 175/175-passing baseline still holds
+3. Run `.venv/Scripts/python.exe -m pytest tests/ -v` to confirm the 178/178-passing baseline still holds
    before changing anything. If it's flaky or order-dependent again, suspect `backend/tools/base.py`'s
    global `TOOLS` dict first (see decision log #10) before assuming new test code is wrong.
 4. Go to TRACK_A_ROADMAP.md, find "Current phase" above (Phase 7), and start there. Don't re-derive the
