@@ -243,7 +243,7 @@ st.markdown(
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("## 🔎 AML Agent")
+    st.markdown("## AML Agent")
     st.markdown("---")
 
     health = _check_health()
@@ -262,6 +262,10 @@ with st.sidebar:
             st.markdown("### 📂 Dataset")
             st.metric("Transactions", f"{summary.get('row_count', 0):,}")
             st.metric("Customers",    f"{summary.get('customer_count', 0):,}")
+            date_min = summary.get("date_min")
+            date_max = summary.get("date_max")
+            if date_min and date_max:
+                st.markdown(f"**Date range:** `{date_min}` → `{date_max}`")
             cols = summary.get("columns", [])
             if cols:
                 with st.expander("Schema columns"):
@@ -282,9 +286,8 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### ℹ️ About")
     st.markdown(
-        "<small>AI-powered Suspicious Activity Detection.<br/>"
-        "Built for the 48h AML hackathon.<br/>"
-        "Track B: Data · Detection · UI</small>",
+        "<small>An agentic AI compliance analyst that translates natural language queries into adaptive execution plans, combining rule-based AML patterns and unsupervised ML anomaly detection to surface risk-scored suspicious entities.<br/><br/>"
+        "Built by <strong>Sesenta y Siete</strong></small>",
         unsafe_allow_html=True,
     )
 
@@ -354,10 +357,17 @@ using_fixture = False
 if run_query and query_input.strip():
     intent_hint = st.session_state.pop("pending_intent", None)
 
-    with st.spinner("Running analysis…"):
+    with st.status("Running analysis…", expanded=True) as _status:
+        st.write("📤 Sending query to backend…")
         t0 = time.time()
         response = _post_query(query_input.strip())
         elapsed = time.time() - t0
+        if response is not None:
+            st.write(f"✅ Response received in {elapsed:.1f}s")
+            _status.update(label=f"Analysis complete — {elapsed:.1f}s", state="complete", expanded=False)
+        else:
+            st.write("⚠️ API call failed — loading fixture data")
+            _status.update(label="API unavailable — showing fixture data", state="error", expanded=False)
 
     if response is None:
         # Live call failed — fall back to fixture
@@ -367,11 +377,8 @@ if run_query and query_input.strip():
         response = dict(response)
         response["query"] = query_input.strip()
         st.warning(
-            f"⚠️ API call failed or timed out. Showing fixture data instead. "
-            f"(elapsed: {elapsed:.1f}s)"
+            f"⚠️ API call failed or timed out after {elapsed:.1f}s. Showing fixture data instead."
         )
-    else:
-        st.success(f"✅ Response received in {elapsed:.1f}s")
 
 elif "pending_intent" in st.session_state:
     # Example button was just clicked — show fixture immediately so the
@@ -414,6 +421,29 @@ if response:
             m_cols = st.columns(len(present))
             for col, (key, val) in zip(m_cols, present.items()):
                 col.metric(key.replace("_", " ").title(), f"{val:,}" if isinstance(val, int) else val)
+
+    # Risk distribution bar chart — shows HIGH/MEDIUM/LOW at a glance
+    _h = metrics.get("high", 0)
+    _m = metrics.get("medium", 0)
+    _l = metrics.get("low", 0)
+    if metrics and (_h or _m or _l):
+        import plotly.graph_objects as _go
+        _fig = _go.Figure(_go.Bar(
+            x=[_h, _m, _l],
+            y=["HIGH", "MEDIUM", "LOW"],
+            orientation="h",
+            marker_color=["#ef4444", "#f97316", "#f59e0b"],
+            text=[str(v) for v in [_h, _m, _l]],
+            textposition="outside",
+        ))
+        _fig.update_layout(
+            height=130, margin=dict(t=4, b=4, l=8, r=40),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#94a3b8", size=13), showlegend=False,
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+            yaxis=dict(showgrid=False),
+        )
+        st.plotly_chart(_fig, use_container_width=True)
 
     # 1 — Execution plan trace (highest-value component, above results)
     render_plan_trace(response)
