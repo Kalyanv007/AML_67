@@ -233,6 +233,15 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date, raw_query: str 
     if isinstance(result.get("entities"), list):
         result["entities"] = _sanitize_entities(result["entities"])
 
+    # Guard: entity_investigation without a real entity_id always errors in
+    # entity_lookup ("entity_id is required").  If the LLM classified the
+    # intent as entity_investigation but extracted zero valid entity IDs,
+    # downgrade to ranking — the correct intent for population-level queries
+    # like "show me risk scores of customers from Germany".
+    if result.get("intent") == "entity_investigation" and not result.get("entities"):
+        result["intent"] = "ranking"
+        result["confidence"] = min(float(result.get("confidence") or 0.6), 0.7)
+
     return result
 
 
