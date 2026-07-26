@@ -223,7 +223,16 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date, raw_query: str 
         seg = filters.get("customer_segment")
         if isinstance(seg, list):
             filters["customer_segment"] = seg[0] if seg and isinstance(seg[0], str) else None
+            seg = filters["customer_segment"]
         elif seg is not None and not isinstance(seg, str):
+            filters.pop("customer_segment", None)
+            seg = None
+        # customer_segment only supports 'business' | 'pep' | 'high_risk'
+        # (see backend/tools/filters.py _filter_customer_segment). Observed
+        # the LLM sometimes stuffing an entity ID in here instead (e.g.
+        # 'C-STR02') when it also puts the same ID in `entities` — drop it
+        # rather than pass a value filter_data will reject with a warning.
+        if isinstance(seg, str) and seg.lower().strip() not in ("business", "pep", "high_risk"):
             filters.pop("customer_segment", None)
 
     # entities must be plain ID strings — smaller models sometimes wrap them in
@@ -232,6 +241,25 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date, raw_query: str 
     # customers" for a ranking query that has no real entity at all).
     if isinstance(result.get("entities"), list):
         result["entities"] = _sanitize_entities(result["entities"])
+
+    # Guard: a query that names a real entity ID and asks an investigative
+    # question about it ("is X suspicious", "investigate X", "X's risk") is
+    # always entity_investigation, regardless of what the LLM guessed —
+    # observed the LLM misroute these to pattern_search (sometimes biased by
+    # an unrelated substring in the ID, e.g. "STR" in "C-STR02" reading like
+    # "structuring"). Mirrors the equivalent, already-correct regex-fallback
+    # logic in _classify(). Explicit "why ... flagged" phrasing is left alone
+    # so explain_flag queries aren't reclassified.
+    q_lower = raw_query.lower()
+    if (
+        result.get("entities")
+        and result.get("intent") not in ("entity_investigation", "explain_flag")
+        and not q_lower.startswith("why")
+        and "why was" not in q_lower
+        and "why is" not in q_lower
+        and any(w in q_lower for w in ("suspicious", "risk", "investigate", "flagged", "flag"))
+    ):
+        result["intent"] = "entity_investigation"
 
     # Guard: entity_investigation without a real entity_id always errors in
     # entity_lookup ("entity_id is required").  If the LLM classified the
