@@ -52,7 +52,9 @@ _SCHEMA_HINT = (
     "date_to, countries, txn_types, amount_min, amount_max, min_txn_count, customer_segment), "
     "entities (list of customer/transaction IDs mentioned, normalised like C-04521 or T-008891), "
     "pattern_types (list from structuring, smurfing, layering, rapid_cashout, velocity, "
-    "dormant_reactivation), top_n (int, default 10), confidence (0-1 float)."
+    "dormant_reactivation), top_n (int, default 10), confidence (0-1 float). "
+    "IMPORTANT: countries must be ISO-3166 alpha-2 codes (e.g. 'DE' not 'Germany', "
+    "'GB' not 'United Kingdom', 'US' not 'United States')."
 )
 
 
@@ -127,6 +129,34 @@ def _coerce_relative_date(value: Any, reference_date: date) -> str | None:
     return None
 
 
+# Full country name → ISO-3166 alpha-2 normalisation.
+# LLMs commonly return full names even when the prompt says ISO-2.
+# This map covers every country that appears in the synthetic and IBM datasets;
+# extend it if new datasets add new countries.
+_COUNTRY_NAME_TO_ISO2: dict[str, str] = {
+    # Full English names
+    "united states": "US", "united states of america": "US",
+    "united kingdom": "GB", "great britain": "GB",
+    "germany": "DE", "deutschland": "DE",
+    "singapore": "SG",
+    "japan": "JP",
+    "canada": "CA",
+    "australia": "AU",
+    "france": "FR",
+    # Common LLM variants / abbreviations
+    "usa": "US", "uk": "GB", "aus": "AU", "jpn": "JP",
+    "can": "CA", "fra": "FR", "deu": "DE", "sgp": "SG",
+}
+
+
+def _normalise_country(value: str) -> str:
+    """Convert a country name or 3-letter code to ISO-2, pass through ISO-2 as-is."""
+    stripped = value.strip()
+    if len(stripped) == 2:
+        return stripped.upper()          # already ISO-2
+    return _COUNTRY_NAME_TO_ISO2.get(stripped.lower(), stripped.upper())
+
+
 def _sanitize_llm_result(llm_result: dict, reference_date: date) -> dict:
     result = dict(llm_result)
     # confidence/top_n are non-Optional QueryIntent fields — an explicit None
@@ -145,6 +175,12 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date) -> dict:
         for key in ("countries", "txn_types"):
             if filters.get(key) is None:
                 filters.pop(key, None)
+        # Normalise country names → ISO-2 codes so they match the dataset columns.
+        # LLMs often return 'Germany' even when told to use 'DE'.
+        if filters.get("countries"):
+            filters["countries"] = [
+                _normalise_country(c) for c in filters["countries"]
+            ]
     return result
 
 

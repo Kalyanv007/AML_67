@@ -187,6 +187,16 @@ anomalous without a business purpose.
 }
 ```
 
+**Implementation search-safety bounds** *(not part of the rule definition — purely computational)*:
+- Maximum search depth (cutoff): **5 hops** (6 nodes). The rule minimum is 3 hops; 5 gives one
+  extra level of headroom without the O(E^8) worst-case of the original undocumented cutoff=8.
+- Hard path cap per (source, sink) pair: **50 paths** (via `itertools.islice`). Prevents runaway
+  enumeration on densely-connected subgraphs.
+- Per-pair wall-clock budget: **200 ms**. If a single (src, snk) pair exceeds this budget, the
+  pair is aborted and a warning note is emitted in `ToolResult.notes`.
+- Graph-size guard: if the wire/transfer subgraph contains **> 500 unique nodes**, the path search
+  is skipped entirely and a warning is emitted. Prevents hangs on large real-world datasets.
+
 ---
 
 ### R4 — Rapid Cash-Out

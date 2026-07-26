@@ -44,7 +44,7 @@ from frontend.components.charts import render_charts, render_tables
 
 API_BASE_URL  = os.getenv("AML_API_URL", "http://localhost:8000")
 FIXTURE_DIR   = Path(__file__).parent / "fixtures"
-REQUEST_TIMEOUT = 60   # seconds
+REQUEST_TIMEOUT = 120   # seconds — must exceed LLM_TIMEOUT_SECONDS (50s) + pipeline (~5s)
 
 # ---------------------------------------------------------------------------
 # Example queries — covers all plan-divergence test cases (WORKPLAN §8)

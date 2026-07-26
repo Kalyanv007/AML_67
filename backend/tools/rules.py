@@ -26,6 +26,8 @@ No tool may import from backend.agent.* or from another tool.
 
 from __future__ import annotations
 
+import itertools
+import time
 from typing import Any, Optional
 
 import networkx as nx
@@ -50,12 +52,24 @@ R2_WINDOW_HOURS      = 48
 R2_SMURFING_BAND_LOW  = 7_000.0
 R2_SMURFING_BAND_HIGH = 9_999.99
 
-R3_MIN_CHAIN_LENGTH   = 3        # ≥ 3 hops (4 nodes)
+R3_MIN_CHAIN_LENGTH   = 3        # ≥ 3 hops (4 nodes) — AML_LOGIC.md §3 R3
 R3_PASS_THROUGH_MIN   = 0.70     # pass_through_ratio per intermediate node
 R3_MIN_CROSS_BORDER   = 1        # ≥ 1 cross-border hop in chain
 R3_CHAIN_TXN_TYPES    = {"wire", "transfer"}
 R3_WINDOW_HOURS       = 48
 R3_MAGNITUDE_TOL      = 0.30     # ±30% outbound vs inbound amount
+# Search-safety constants (NOT part of the AML rule definition — purely
+# computational bounds to prevent combinatorial explosion on dense graphs):
+R3_CUTOFF             = 5        # maximum hop depth (5 hops = 6 nodes).  AML_LOGIC.md
+                                  # documents 3 as the *minimum*; 5 gives one level of
+                                  # headroom beyond the documented minimum without
+                                  # exponential blow-up.  cutoff=8 was an undocumented
+                                  # implementation choice that created O(E^8) worst-case.
+R3_MAX_PATHS_PER_PAIR = 50       # islice hard-cap: stop after 50 paths per (src,snk) pair
+R3_PAIR_BUDGET_SECS   = 0.20     # per-(src,snk) wall-clock budget — abort if exceeded
+R3_MAX_GRAPH_NODES    = 500      # if the wire/transfer subgraph exceeds this many unique
+                                  # nodes, skip the full path search (dataset too dense for
+                                  # safe enumeration without structural pre-filtering)
 
 R4_MIN_INBOUND        = 10_000.0
 R4_MIN_CASH_OUTS      = 3
@@ -197,14 +211,22 @@ def _run_r2_smurfing(
 def _run_r3_layering(
     df: pd.DataFrame,
     features: pd.DataFrame,
+    _notes_out: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """R3 — Layering: networkx chain of ≥ 3 hops with pass-through ≥ 0.70 and ≥ 1 cross-border hop.
 
     Graph: directed weighted graph where edge A→B means A sent to B via wire/transfer.
     For each simple path ≥ 4 nodes: check each intermediate node's pass_through_ratio ≥ 0.70
     and that at least 1 edge is cross-border.
+
+    Search safety bounds (see constants above):
+      - Graph size guard: skip if > R3_MAX_GRAPH_NODES unique nodes in eligible set
+      - cutoff=R3_CUTOFF (5 hops) rather than 8 — documents maximum chain depth
+      - islice(MAX_PATHS_PER_PAIR) caps paths enumerated per (src,snk) pair
+      - Per-pair wall-clock budget of R3_PAIR_BUDGET_SECS seconds
     """
     hits: list[dict[str, Any]] = []
+    notes = _notes_out if _notes_out is not None else []
 
     # Only wire/transfer transactions
     eligible = df[df["txn_type"].isin(R3_CHAIN_TXN_TYPES)].copy()
@@ -212,12 +234,30 @@ def _run_r3_layering(
         return hits
 
     # ------------------------------------------------------------------
-    # Fast-exit: R3 requires ≥ 1 cross-border hop per chain.  If the
-    # dataset has NO cross-border transactions at all (e.g. IBM HI-Small
-    # which records UNK/UNK for all countries) then no chain can ever
-    # satisfy that constraint.  Skip the entire expensive graph search.
+    # Logical early-exit: R3 requires ≥ 1 cross-border hop per chain.
+    # If the dataset has NO cross-border transactions at all (e.g. IBM
+    # HI-Small which records UNK/UNK for all countries) then no chain can
+    # ever satisfy that constraint — skip immediately.
+    # NOTE: this guard is correct logic, not a performance hack.  It is
+    # kept here explicitly; the graph-size guard below is the actual
+    # performance circuit breaker for dense datasets.
     # ------------------------------------------------------------------
     if not eligible["is_cross_border"].any():
+        return hits
+
+    # ------------------------------------------------------------------
+    # Graph-size guard: if there are too many unique nodes in the
+    # wire/transfer subgraph, the path enumeration is not safe to run
+    # without structural pre-filtering.  Log a note and return.
+    # ------------------------------------------------------------------
+    unique_nodes = pd.unique(
+        pd.concat([eligible["sender_id"], eligible["receiver_id"]]).values
+    )
+    if len(unique_nodes) > R3_MAX_GRAPH_NODES:
+        notes.append(
+            f"R3: graph too large ({len(unique_nodes)} nodes > {R3_MAX_GRAPH_NODES} limit) "
+            "— layering path search skipped to prevent combinatorial explosion"
+        )
         return hits
 
     # ------------------------------------------------------------------
@@ -238,42 +278,77 @@ def _run_r3_layering(
             timestamp=row.timestamp,
         )
 
-    # Pass-through threshold lookup
+    # Pass-through feature availability
     ppt_feat = "pass_through_ratio" in features.columns
 
-    already_hit: set[str] = set()
+    # ------------------------------------------------------------------
+    # Restrict candidate src/snk nodes to plausible pass-through nodes.
+    # A node that will never appear as an intermediate (because it has
+    # pass_through_ratio < 0.70 in features) cannot be part of a valid
+    # chain — use this to trim the search space.
+    # Sources: in_degree=0 (no one sends to them in this subgraph)
+    # Sinks:   out_degree=0 (they don't forward)
+    # Intermediates must have pass_through_ratio ≥ threshold in features.
+    # ------------------------------------------------------------------
+    if ppt_feat:
+        # Nodes that CAN serve as intermediates (pass_through_ratio ok)
+        valid_intermediates: set[str] = {
+            str(cid) for cid in features.index
+            if float(features.loc[cid, "pass_through_ratio"]) >= R3_PASS_THROUGH_MIN
+        }
+    else:
+        # No feature data — all nodes are candidates (conservative)
+        valid_intermediates = set(G.nodes())
 
-    # Find chains: enumerate all simple paths from source to sink nodes
-    # nx.all_simple_paths(G, source, target) requires explicit target.
-    # We enumerate (source, sink) pairs where source has in_degree=0 and sink has out_degree=0.
+    # Sources: in_degree=0 among graph nodes
     sources = [n for n in G.nodes() if G.in_degree(n) == 0]
     sinks   = [n for n in G.nodes() if G.out_degree(n) == 0]
-    # Fallback: if the graph is strongly connected, use all node pairs
+    # Fallback if graph is strongly connected
     if not sources:
         sources = list(G.nodes())
     if not sinks:
         sinks = list(G.nodes())
 
+    already_hit: set[str] = set()
+    pairs_timed_out = 0
+
     for src in sources:
         for snk in sinks:
             if src == snk:
                 continue
+            # Skip pairs where no valid intermediate can exist on any path
+            # (quick reachability check: src must be able to reach a valid
+            # intermediate, and that intermediate must reach snk).  We
+            # approximate this cheaply by checking if src's successors
+            # contain at least one valid intermediate candidate.
+            if ppt_feat:
+                src_successors = set(G.successors(src))
+                if not src_successors.intersection(valid_intermediates):
+                    continue
+
+            pair_deadline = time.monotonic() + R3_PAIR_BUDGET_SECS
             try:
-                for path in nx.all_simple_paths(G, src, snk, cutoff=8):
+                path_gen = nx.all_simple_paths(G, src, snk, cutoff=R3_CUTOFF)
+                for path in itertools.islice(path_gen, R3_MAX_PATHS_PER_PAIR):
+                    # Per-pair wall-clock budget
+                    if time.monotonic() > pair_deadline:
+                        pairs_timed_out += 1
+                        break
+
                     if len(path) < R3_MIN_CHAIN_LENGTH + 1:
                         continue
+
                     # Check each intermediate node's pass_through_ratio
                     intermediates = path[1:-1]
-                    ppt_ok = all(
-                        (
-                            ppt_feat
-                            and path_node in features.index
+                    if ppt_feat:
+                        ppt_ok = all(
+                            path_node in features.index
                             and float(features.loc[path_node, "pass_through_ratio"]) >= R3_PASS_THROUGH_MIN
+                            for path_node in intermediates
                         )
-                        for path_node in intermediates
-                    )
-                    if not ppt_ok:
-                        continue
+                        if not ppt_ok:
+                            continue
+
                     # Check ≥ 1 cross-border hop
                     n_xb = sum(
                         1 for a, b in zip(path[:-1], path[1:])
@@ -281,6 +356,7 @@ def _run_r3_layering(
                     )
                     if n_xb < R3_MIN_CROSS_BORDER:
                         continue
+
                     # Build evidence for the chain anchor (source of chain)
                     anchor = path[0]
                     if anchor in already_hit:
@@ -318,7 +394,14 @@ def _run_r3_layering(
             except (nx.NetworkXError, nx.exception.NetworkXNoPath):
                 continue
 
+    if pairs_timed_out > 0:
+        notes.append(
+            f"R3: {pairs_timed_out} (src,snk) pair(s) hit the {R3_PAIR_BUDGET_SECS}s "
+            "per-pair budget and were aborted — dense subgraph detected"
+        )
+
     return hits
+
 
 
 def _run_r4_rapid_cashout(
@@ -625,6 +708,7 @@ def rule_detect(
 
         all_hits: list[dict[str, Any]] = []
         per_rule_counts: dict[str, int] = {}
+        r3_notes: list[str] = []  # collects R3 search-budget notes
 
         if "R1" in rules_to_run:
             h = _run_r1_structuring(df, features)
@@ -637,7 +721,7 @@ def rule_detect(
             per_rule_counts["R2"] = len(h)
 
         if "R3" in rules_to_run:
-            h = _run_r3_layering(df, features)
+            h = _run_r3_layering(df, features, _notes_out=r3_notes)
             all_hits.extend(h)
             per_rule_counts["R3"] = len(h)
 
@@ -658,10 +742,11 @@ def rule_detect(
 
         # Build notes per rule
         notes = []
+        notes.extend(r3_notes)  # R3 search-budget warnings, if any
         for rule_id, count in sorted(per_rule_counts.items()):
             if count > 0:
                 notes.append(f"{rule_id}: {count} customer(s) flagged")
-        if not notes:
+        if not [n for n in notes if not n.startswith("R3:")]:
             notes.append("rule_detect: no rule hits on this dataset")
 
         patterns_label = ", ".join(patterns) if patterns else "all"
