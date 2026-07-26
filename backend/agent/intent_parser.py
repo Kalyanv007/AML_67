@@ -166,6 +166,26 @@ _UNDER_WORDS = ("under $", "below $", "less than $")
 _OVER_WORDS = ("over $", "above $", "more than $", "at least $")
 
 
+def _fix_last_n_days_window(filters: dict, raw_query: str, reference_date: date) -> None:
+    """Explicit "last N days/weeks/months" phrasing is unambiguous — it always
+    means [reference_date - N, reference_date]. Observed the LLM invert this:
+    e.g. for "last 30 days" it returned date_from='' and date_to='30 days ago',
+    which _coerce_relative_date faithfully turns into an upper bound of 30
+    days ago with NO lower bound at all — "everything up to 30 days ago",
+    the opposite of the intended trailing window. Since this phrasing has one
+    unambiguous meaning, just compute it directly (same formula the regex
+    fallback in _parse_with_rules already uses) and override whatever the LLM
+    proposed for these two fields.
+    """
+    m = LAST_N_RE.search(raw_query.lower())
+    if not m:
+        return
+    n, unit = int(m.group(1)), m.group(2)
+    days = n if unit == "day" else n * 7 if unit == "week" else n * 30
+    filters["date_from"] = (reference_date - timedelta(days=days)).isoformat()
+    filters["date_to"] = reference_date.isoformat()
+
+
 def _fix_one_sided_amount_bound(filters: dict, raw_query: str) -> None:
     """Some LLM providers (observed with weaker/local models) mishandle a
     one-sided amount phrase like "under $10,000" in two ways: (a) collapsing
@@ -206,6 +226,7 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date, raw_query: str 
         for key in ("date_from", "date_to"):
             if key in filters:
                 filters[key] = _coerce_relative_date(filters[key], reference_date)
+        _fix_last_n_days_window(filters, raw_query, reference_date)
         # countries/txn_types are non-Optional `list[str] = []` Filters fields —
         # same class of bug as confidence/top_n above, but nested.
         for key in ("countries", "txn_types"):
