@@ -9,6 +9,7 @@ license to invent a number.
 
 from typing import Any
 
+from backend.config import settings
 from backend.llm.client import complete_json
 from backend.schemas import Escalation, Evidence, Flag, RiskLevel
 
@@ -31,10 +32,21 @@ ESCALATION_BY_LEVEL: dict[RiskLevel, Escalation] = {
 
 def build_flags(risk_rows: list[dict[str, Any]]) -> list[Flag]:
     flags: list[Flag] = []
+    polished_count = 0
     for row in risk_rows:
         evidence = _build_evidence(row)
-        explanation = _explain(row, evidence)
         risk_level: RiskLevel = row["risk_level"]
+        # Cap LLM polish to the first N HIGH-risk rows (risk_classify already
+        # emits risk_rows sorted by risk_score descending, so this is "top N"),
+        # not "every HIGH-risk row" — a full_analysis run can produce 20+ HIGH
+        # flags, and at several seconds per call that multiplies past the
+        # frontend's request timeout (measured live: 23 HIGH flags -> 144s
+        # total against local Ollama, vs. a 60s frontend timeout). Every row
+        # still gets an accurate template-based explanation regardless.
+        allow_llm_polish = risk_level == "high" and polished_count < settings.llm_polish_max_flags
+        if allow_llm_polish:
+            polished_count += 1
+        explanation = _explain(row, evidence, allow_llm_polish=allow_llm_polish)
         escalation: Escalation = row.get("escalation") or ESCALATION_BY_LEVEL[risk_level]
         flags.append(
             Flag(
@@ -101,7 +113,7 @@ def _format_raw_evidence(raw: dict[str, Any]) -> str:
     return "; ".join(parts)
 
 
-def _explain(row: dict[str, Any], evidence: list[Evidence]) -> str:
+def _explain(row: dict[str, Any], evidence: list[Evidence], allow_llm_polish: bool = False) -> str:
     parts: list[str] = []
     for rule_id in row.get("triggered_rules", []):
         ev = next((e for e in evidence if e.rule_id == rule_id), None)
@@ -122,14 +134,11 @@ def _explain(row: dict[str, Any], evidence: list[Evidence]) -> str:
 
     text = " ".join(parts)
 
-    # LLM polish is capped to HIGH-risk flags only: a full_analysis run can
-    # produce dozens of flags, and one LLM call per flag would burn through a
-    # free-tier rate limit on a single query. HIGH-risk flags are the ones
-    # that matter most (they're the ones getting a SAR draft below) and are
-    # typically a small fraction of the total, so this keeps the "LLM adds
-    # value" story without the volume risk. MEDIUM/LOW/NONE ship the
-    # template text, which is already specific and accurate.
-    if row.get("risk_level") != "high":
+    # LLM polish is capped by build_flags() to the top settings.llm_polish_max_flags
+    # HIGH-risk rows (not "every HIGH-risk row") — see that function for why.
+    # MEDIUM/LOW/NONE, and any HIGH row past the cap, ship the template text,
+    # which is already specific and accurate.
+    if not allow_llm_polish:
         return text
 
     polished = complete_json(

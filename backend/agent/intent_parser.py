@@ -181,7 +181,49 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date) -> dict:
             filters["countries"] = [
                 _normalise_country(c) for c in filters["countries"]
             ]
+        # customer_segment must be a plain string — smaller/weaker models
+        # (observed with a local 3B Ollama model) sometimes wrap it in a list.
+        seg = filters.get("customer_segment")
+        if isinstance(seg, list):
+            filters["customer_segment"] = seg[0] if seg and isinstance(seg[0], str) else None
+        elif seg is not None and not isinstance(seg, str):
+            filters.pop("customer_segment", None)
+
+    # entities must be plain ID strings — smaller models sometimes wrap them in
+    # descriptive objects instead (e.g. {"entity_type": "customer", "value": "..."})
+    # or invent an "entity" out of a non-ID phrase entirely (e.g. "3 sketchiest
+    # customers" for a ranking query that has no real entity at all).
+    if isinstance(result.get("entities"), list):
+        result["entities"] = _sanitize_entities(result["entities"])
+
     return result
+
+
+def _sanitize_entities(entities: list) -> list[str]:
+    cleaned: list[str] = []
+    for e in entities:
+        candidate: str | None = None
+        if isinstance(e, str):
+            candidate = e
+        elif isinstance(e, dict):
+            for key in ("value", "id", "entity_id", "customer_id"):
+                if isinstance(e.get(key), str):
+                    candidate = e[key]
+                    break
+        if not candidate:
+            continue
+        # only keep it if it actually looks like an ID (C-/T- prefixed, or a
+        # bare 4-6 digit number) — rejects invented descriptive phrases like
+        # "3 sketchiest customers" rather than passing them through as if they
+        # were a real entity to look up.
+        m = ENTITY_RE.search(candidate)
+        if m:
+            cleaned.append(m.group(1).upper())
+            continue
+        m = BARE_ID_RE.search(candidate)
+        if m:
+            cleaned.append(_normalise_bare_number(m.group(1)))
+    return cleaned
 
 
 def _parse_with_rules(raw_query: str, reference_date: date) -> QueryIntent:

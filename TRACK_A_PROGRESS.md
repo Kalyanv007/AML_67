@@ -6,8 +6,8 @@ Do not re-read the whole codebase to figure out where things stand — this file
 exactly that reason. Update it every time you finish a subtask or make a decision, not just at hour
 boundaries.
 
-**Last updated:** 2026-07-26, added Ollama as a 4th LLM provider + response caching, and fixed a real
-test-isolation bug that was likely the dominant cause of today's quota exhaustion.
+**Last updated:** 2026-07-26, fixed a real bug causing full_analysis to time out even on local Ollama —
+narrator was LLM-polishing every HIGH-risk flag (23 of them = 144s), not a bounded number.
 
 ---
 
@@ -240,6 +240,40 @@ a bit slower per-token than CUDA at the *same* model size — the M3's edge is c
 `pytest tests/ -v` → **195 passed, 3 skipped, confirmed** (190 + 5 new `test_llm_client.py` tests). The 3
 skips are pre-existing (Track B's, not introduced here) — investigate if picked up later and this note
 looks stale.
+
+### LLM-polish cap — real bug found and fixed (this update)
+User reported "analyse this dataset for suspicious activity" still timed out and fell back to Streamlit's
+fixture data **even with local Ollama active** — the exact problem switching to local was supposed to
+solve. Investigated rather than assumed; found via a fresh timed `run_plan()` call (not guessed):
+
+```
+provider: ollama | model: qwen2.5:3b-instruct
+total run_plan time: 144.4s
+total flags: 30 | HIGH: 23
+  load_data: 12ms  eda_profile: 1001ms  feature_engineer: 7219ms  rule_detect: 2067ms  ml_detect: 2027ms
+```
+Pipeline steps sum to ~12.3s. The other **~132s** was `narrator.build_flags()` — the existing "LLM-polish
+HIGH-risk flags only" cap (added earlier to protect a *cloud* quota) bounds the wrong thing: it limits
+*which* flags get a call, not *how many*, and `full_analysis` produced 23 HIGH flags, each a separate
+serial `complete_json` call. Cloud rate-limiting had been accidentally masking this all session (failed
+429s return fast; local Ollama has no rate limit, so all 23 calls mostly succeed, just slowly).
+
+**Fix**: added `settings.llm_polish_max_flags` (default 5) to `backend/config.py`. `narrator.build_flags()`
+now tracks a running count and only sets `allow_llm_polish=True` for the first N HIGH-risk rows
+encountered (risk_rows already arrive sorted by `risk_score` descending from `risk_classify`, so this is
+"top N by risk," not an arbitrary subset) — every row still gets a correct template-based explanation,
+escalation, and SAR draft regardless; only the LLM-rewritten prose is capped.
+
+**Verified**: unit test with mocked `complete_json` (10 HIGH rows in → exactly `llm_polish_max_flags`
+calls out). Live re-run of the exact same query: **144.4s → 45.1s** direct, **46.6s via the real HTTP
+API** (`HTTP 200`, not a fixture fallback) — comfortably under the frontend's 60s timeout, though the
+margin (~13-14s) isn't huge; if pipeline compute varies upward (`feature_engineer` ranged 7.2-9.5s across
+runs) it's worth knowing `llm_polish_max_flags` can be lowered further (e.g. to 3) for more headroom, or
+the value could be tuned down when running the 3B model specifically vs. a faster cloud provider. 2 new
+tests added to `tests/test_narrator.py` (cap enforcement; cap only counts HIGH rows, never consumed by
+MEDIUM/LOW/NONE).
+
+`pytest tests/ -v` → **197 passed, 3 skipped, confirmed** (195 + these 2 new tests).
 
 ### Immediate next action
 No Track A phase work remains in the original 7-phase plan. Four LLM providers wired now (Gemini, Groq,

@@ -490,6 +490,28 @@ discrete GPU physically can't).
 
 ---
 
+## Standalone fix — LLM-polish call count, not just "HIGH-only" ✅ DONE
+
+User reported `full_analysis` still timed out and fell back to Streamlit's fixture data **even with local
+Ollama active** — the exact problem local was supposed to solve. Investigated with a fresh timed
+`run_plan()` call before touching any code: pipeline steps (load/eda/features/rules/ml) summed to ~12.3s;
+the other **~132s of a 144.4s total** was `narrator.build_flags()` — 23 HIGH-risk flags, each a separate
+serial `complete_json` call. The existing "LLM-polish HIGH-risk only" gate (added to protect a *cloud*
+quota) bounds *which* flags get a call, not *how many* — cloud rate-limiting had been accidentally masking
+this all session (429s fail fast; local Ollama has no rate limit, so all 23 calls mostly succeed, just
+slowly, one after another, well past the frontend's 60s timeout).
+
+Fixed with `settings.llm_polish_max_flags` (default 5, `backend/config.py`) — `narrator.build_flags()` now
+LLM-polishes only the first N HIGH-risk rows (already sorted by `risk_score` descending from
+`risk_classify`, so genuinely "top N," not arbitrary). Every row still gets a correct template
+explanation/escalation/SAR draft regardless of the cap.
+
+Live re-verified the exact same query after the fix: **144.4s → 45.1s direct, 46.6s via the real HTTP
+API** (`HTTP 200`, confirmed not a fixture fallback). 2 new tests in `tests/test_narrator.py`. Full suite:
+**197 passed, 3 skipped**.
+
+---
+
 ## Notes for whoever (human or agent) picks this file up
 
 - Don't reorder or renumber phases — TRACK_A_PROGRESS.md references them by number.
