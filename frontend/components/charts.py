@@ -1,10 +1,12 @@
 """
 frontend/components/charts.py
 
-Renders Plotly charts from AgentResponse.charts (dict[str, dict]).
+Renders Plotly charts from AgentResponse.charts (dict[str, dict]), the
+KPI metrics row, and the risk-distribution bar chart.
 
-The dict values are already Plotly figure JSON (per Contract 1 / ToolResult.charts).
-We render them directly with st.plotly_chart — no reconstruction from metrics.
+The chart dict values are already Plotly figure JSON (per Contract 1 /
+ToolResult.charts). We render them directly with st.plotly_chart — no
+reconstruction from metrics.
 
 Owner: Track B. No backend.agent.* imports.
 """
@@ -13,6 +15,66 @@ from __future__ import annotations
 
 import streamlit as st
 import plotly.graph_objects as go
+
+from frontend.components.theme import KPI_SPECS, RISK_COLOR, TEXT_MUTED, resolve_metric
+
+
+def render_kpi_row(metrics: dict) -> None:
+    """Bordered-container KPI cards — the streamlit==1.39-compatible
+    equivalent of st.metric(border=True) (that param needs streamlit>=1.40).
+
+    Resolves both the live tools' key names and the fixture's aspirational
+    key names via theme.resolve_metric, so this renders correctly in both
+    LIVE and FIXTURE mode.
+    """
+    if not metrics:
+        return
+
+    present = [(label, resolve_metric(metrics, *aliases)) for label, aliases in KPI_SPECS]
+    present = [(label, val) for label, val in present if val is not None]
+    if not present:
+        return
+
+    cols = st.columns(len(present), gap="small")
+    for col, (label, val) in zip(cols, present):
+        with col, st.container(border=True):
+            st.metric(label, f"{val:,}" if isinstance(val, int) else val)
+
+
+def render_risk_distribution(metrics: dict) -> None:
+    """HIGH/MEDIUM/LOW bar — shows the risk breakdown at a glance.
+
+    Uses the same alias resolver as render_kpi_row, so it can no longer
+    disagree with the KPI row (previously read a different, inconsistent
+    set of keys than the metrics row above it).
+    """
+    h = resolve_metric(metrics, "high_risk", "high") or 0
+    m = resolve_metric(metrics, "medium_risk", "medium") or 0
+    low = resolve_metric(metrics, "low_risk", "low") or 0
+    if not (h or m or low):
+        return
+
+    fig = go.Figure(
+        go.Bar(
+            x=[h, m, low],
+            y=["HIGH", "MEDIUM", "LOW"],
+            orientation="h",
+            marker_color=[RISK_COLOR["high"], RISK_COLOR["medium"], RISK_COLOR["low"]],
+            text=[str(v) for v in (h, m, low)],
+            textposition="outside",
+        )
+    )
+    fig.update_layout(
+        height=140,
+        margin=dict(t=4, b=4, l=8, r=40),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color=TEXT_MUTED, size=13),
+        showlegend=False,
+        xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
+        yaxis=dict(showgrid=False),
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def render_charts(charts: dict) -> None:
@@ -23,8 +85,7 @@ def render_charts(charts: dict) -> None:
     if not charts:
         return
 
-    st.markdown("---")
-    st.subheader("📊 Dataset Charts")
+    st.subheader("Dataset Charts", divider="grey")
 
     for chart_name, fig_json in charts.items():
         if not fig_json:
@@ -46,8 +107,7 @@ def render_tables(tables: dict, response: dict) -> None:
     if not tables:
         return
 
-    st.markdown("---")
-    st.subheader("📋 Result Tables")
+    st.subheader("Result Tables", divider="grey")
 
     import json
     import pandas as pd
@@ -79,7 +139,7 @@ def render_tables(tables: dict, response: dict) -> None:
             )
 
     # Full AgentResponse export
-    st.markdown("---")
+    st.divider()
     st.markdown("**Export full AgentResponse:**")
     col1, col2 = st.columns(2)
     with col1:

@@ -11,11 +11,8 @@ Each card shows:
   - SAR draft (only when sar_draft is not None — HIGH risk only per Contract 1)
   - Triggered rules + ML score
 
-Risk band → colour mapping (stated here per the task instructions):
-  high   → #ef4444  (red)
-  medium → #f97316  (orange)
-  low    → #f59e0b  (amber)
-  none   → #64748b  (slate grey)
+Risk band → colour mapping lives in frontend/components/theme.py (RISK_COLOR),
+shared with plan_trace.py so the palette can't drift between components.
 
 Escalation icon mapping:
   report    → 🚨
@@ -30,16 +27,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-# ------------------------------------------------------------------
-# Colour + icon maps
-# ------------------------------------------------------------------
-
-_RISK_COLOUR: dict[str, str] = {
-    "high":   "#ef4444",
-    "medium": "#f97316",
-    "low":    "#f59e0b",
-    "none":   "#64748b",
-}
+from frontend.components.theme import RISK_COLOR, RISK_TEXT_ON, TEXT_MUTED
 
 _ESCALATION_ICON: dict[str, str] = {
     "report":    "🚨",
@@ -50,9 +38,10 @@ _ESCALATION_ICON: dict[str, str] = {
 
 
 def _risk_badge(level: str, score: float) -> str:
-    colour = _RISK_COLOUR.get(level, "#64748b")
+    colour = RISK_COLOR.get(level, "#64748b")
+    text_colour = RISK_TEXT_ON.get(level, "#ffffff")
     return (
-        f'<span style="background:{colour};color:#fff;border-radius:6px;'
+        f'<span style="background:{colour};color:{text_colour};border-radius:6px;'
         f'padding:4px 12px;font-size:14px;font-weight:700;letter-spacing:1px;">'
         f'{level.upper()} · {score:.1f}</span>'
     )
@@ -97,69 +86,62 @@ def _render_one_flag(flag: dict) -> None:
     evidence   = flag.get("evidence", [])
     sar_draft  = flag.get("sar_draft")
 
-    colour   = _RISK_COLOUR.get(risk_level, "#64748b")
     esc_icon = _ESCALATION_ICON.get(escalation, "")
 
     # HIGH cards open by default; MEDIUM/LOW collapsed so the page stays clean
     expanded = risk_level == "high"
-    label = (
-        f"{esc_icon} {entity_id} · {risk_level.upper()} · {risk_score:.1f}"
-    )
+    label = f"{entity_id} · {risk_level.upper()} · {risk_score:.1f}"
 
-    with st.expander(label, expanded=expanded):
-        st.markdown(
-            f'<div style="border-left:4px solid {colour};padding:8px 12px;'
-            f'border-radius:4px;background:#1e293b;margin-bottom:8px;">',
-            unsafe_allow_html=True,
-        )
+    with st.expander(label, expanded=expanded, icon=esc_icon or "🚩"):
+        with st.container(border=True):
+            # Header row: badge + escalation
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.markdown(_risk_badge(risk_level, risk_score), unsafe_allow_html=True)
+                st.markdown(f"### `{entity_id}`")
+            with col2:
+                st.markdown(
+                    f"<div style='text-align:right;padding-top:8px;'>"
+                    f"<span style='font-size:24px'>{esc_icon}</span><br/>"
+                    f"<span style='color:{TEXT_MUTED};font-size:13px;'>{escalation.replace('_',' ').upper()}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-        # Header row: badge + escalation
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            st.markdown(_risk_badge(risk_level, risk_score), unsafe_allow_html=True)
-            st.markdown(f"### `{entity_id}`")
-        with col2:
-            st.markdown(
-                f"<div style='text-align:right;padding-top:8px;'>"
-                f"<span style='font-size:24px'>{esc_icon}</span><br/>"
-                f"<span style='color:#94a3b8;font-size:13px;'>{escalation.replace('_',' ').upper()}</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+            # Patterns + rules + ML score
+            meta_cols = st.columns(3)
+            with meta_cols[0]:
+                if patterns:
+                    st.markdown(f"**Patterns:** {', '.join(f'`{p}`' for p in patterns)}")
+            with meta_cols[1]:
+                if rules:
+                    st.markdown(f"**Rules triggered:** {', '.join(f'`{r}`' for r in rules)}")
+            with meta_cols[2]:
+                if ml_score is not None:
+                    st.markdown(f"**ML percentile:** `{ml_score:.1%}`")
 
-        # Patterns + rules + ML score
-        meta_cols = st.columns(3)
-        with meta_cols[0]:
-            if patterns:
-                st.markdown(f"**Patterns:** {', '.join(f'`{p}`' for p in patterns)}")
-        with meta_cols[1]:
-            if rules:
-                st.markdown(f"**Rules triggered:** {', '.join(f'`{r}`' for r in rules)}")
-        with meta_cols[2]:
-            if ml_score is not None:
-                st.markdown(f"**ML percentile:** `{ml_score:.1%}`")
+            # Explanation
+            st.markdown(f"**Explanation:** {explanation}")
 
-        # Explanation
-        st.markdown(f"**Explanation:** {explanation}")
+            # Evidence table
+            if evidence:
+                st.markdown("**Evidence:**")
+                ev_rows = [
+                    {
+                        "Rule":      ev.get("rule_id") or "—",
+                        "Feature":   ev.get("feature") or "—",
+                        "Value":     ev.get("value", ""),
+                        "Threshold": ev.get("threshold") or "—",
+                        "Note":      ev.get("note", ""),
+                    }
+                    for ev in evidence
+                ]
+                st.dataframe(ev_rows, use_container_width=True, hide_index=True)
 
-        # Evidence table
-        if evidence:
-            st.markdown("**Evidence:**")
-            ev_rows = [
-                {
-                    "Rule":      ev.get("rule_id") or "—",
-                    "Feature":   ev.get("feature") or "—",
-                    "Value":     ev.get("value", ""),
-                    "Threshold": ev.get("threshold") or "—",
-                    "Note":      ev.get("note", ""),
-                }
-                for ev in evidence
-            ]
-            st.dataframe(ev_rows, use_container_width=True, hide_index=True)
-
-        # SAR draft (HIGH only) — rendered as st.code so judges can copy it
-        if sar_draft:
-            with st.expander("📋 SAR Draft — click to expand and copy", expanded=False):
+            # SAR draft (HIGH only) — rendered as st.code so judges can copy it.
+            # Not wrapped in its own expander: this card is already inside the
+            # outer st.expander in render_flag_cards(), and Streamlit disallows
+            # nesting an expander inside another expander.
+            if sar_draft:
+                st.markdown("**📋 SAR Draft:**")
                 st.code(sar_draft, language=None)
-
-        st.markdown("</div>", unsafe_allow_html=True)

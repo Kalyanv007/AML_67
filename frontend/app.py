@@ -36,7 +36,12 @@ import streamlit as st
 
 from frontend.components.plan_trace import render_plan_trace
 from frontend.components.flag_cards import render_flag_cards
-from frontend.components.charts import render_charts, render_tables
+from frontend.components.charts import (
+    render_charts,
+    render_tables,
+    render_kpi_row,
+    render_risk_distribution,
+)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -167,71 +172,14 @@ st.markdown(
         font-family: 'Inter', sans-serif;
     }
 
-    .stApp {
-        background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
-        min-height: 100vh;
-    }
-
     .main-header {
-        background: linear-gradient(90deg, #6366f1, #8b5cf6, #a855f7);
+        background: linear-gradient(90deg, #1e40af, #2563eb, #3b82f6);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-size: 2.5rem;
         font-weight: 700;
         letter-spacing: -1px;
         margin-bottom: 0;
-    }
-
-    .fixture-banner {
-        background: linear-gradient(90deg, #7c3aed22, #6366f122);
-        border: 1px solid #6366f1;
-        border-radius: 8px;
-        padding: 10px 16px;
-        margin-bottom: 16px;
-        color: #a5b4fc;
-        font-size: 13px;
-    }
-
-    .stButton > button {
-        background: linear-gradient(135deg, #6366f1, #8b5cf6);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-    }
-
-    .stButton > button:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
-    }
-
-    .example-btn > button {
-        background: #1e293b !important;
-        border: 1px solid #334155 !important;
-        color: #94a3b8 !important;
-        font-size: 12px !important;
-        font-weight: 500 !important;
-        padding: 4px 10px !important;
-    }
-
-    .example-btn > button:hover {
-        border-color: #6366f1 !important;
-        color: #a5b4fc !important;
-        transform: none !important;
-        box-shadow: none !important;
-    }
-
-    [data-testid="metric-container"] {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 8px;
-        padding: 12px;
-    }
-
-    .stDataFrame {
-        border: 1px solid #334155;
-        border-radius: 6px;
     }
     </style>
     """,
@@ -243,14 +191,13 @@ st.markdown(
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("## AML Agent")
-    st.markdown("---")
+    st.header("AML Agent", divider="grey")
 
     health = _check_health()
     api_live = health is not None
 
     if api_live:
-        st.success("✅ API Online")
+        st.success("API Online", icon="✅")
         llm_ok = health.get("llm_available", False)
         mocks  = health.get("mocks", False)
         st.markdown(f"**LLM:** {'✅ Available' if llm_ok else '⚠️ Offline (fallback mode)'}")
@@ -258,10 +205,11 @@ with st.sidebar:
 
         summary = _get_dataset_summary()
         if summary:
-            st.markdown("---")
-            st.markdown("### 📂 Dataset")
-            st.metric("Transactions", f"{summary.get('row_count', 0):,}")
-            st.metric("Customers",    f"{summary.get('customer_count', 0):,}")
+            st.subheader("Dataset", divider="grey")
+            with st.container(border=True):
+                st.metric("Transactions", f"{summary.get('row_count', 0):,}")
+            with st.container(border=True):
+                st.metric("Customers", f"{summary.get('customer_count', 0):,}")
             date_min = summary.get("date_min")
             date_max = summary.get("date_max")
             if date_min and date_max:
@@ -272,23 +220,19 @@ with st.sidebar:
                     for c in cols:
                         st.markdown(f"- `{c}`")
     else:
-        st.warning("⚠️ API Offline")
-        st.markdown(
-            "<small>Track A's API is not running.<br/>"
-            "Showing fixture data — results are illustrative.</small>",
-            unsafe_allow_html=True,
-        )
-        st.markdown("---")
-        st.markdown("### 📂 Fixture Dataset")
-        st.metric("Transactions", "2,000")
-        st.metric("Customers",    "270")
+        st.warning("API Offline", icon="⚠️")
+        st.caption("Track A's API is not running. Showing fixture data — results are illustrative.")
+        st.subheader("Fixture Dataset", divider="grey")
+        with st.container(border=True):
+            st.metric("Transactions", "2,000")
+        with st.container(border=True):
+            st.metric("Customers", "270")
 
-    st.markdown("---")
-    st.markdown("### ℹ️ About")
-    st.markdown(
-        "<small>An agentic AI compliance analyst that translates natural language queries into adaptive execution plans, combining rule-based AML patterns and unsupervised ML anomaly detection to surface risk-scored suspicious entities.<br/><br/>"
-        "Built by <strong>Sesenta y Siete</strong></small>",
-        unsafe_allow_html=True,
+    st.subheader("About", divider="grey")
+    st.caption(
+        "An agentic AI compliance analyst that translates natural language queries into adaptive "
+        "execution plans, combining rule-based AML patterns and unsupervised ML anomaly detection "
+        "to surface risk-scored suspicious entities.\n\nBuilt by **Sesenta y Siete**"
     )
 
 # ---------------------------------------------------------------------------
@@ -296,20 +240,18 @@ with st.sidebar:
 # ---------------------------------------------------------------------------
 
 st.markdown('<h1 class="main-header">AML Suspicious Activity Detection</h1>', unsafe_allow_html=True)
-st.markdown(
-    "<p style='color:#94a3b8;margin-top:0;'>Natural-language queries over financial transaction data · "
-    "Adaptive execution plans · Risk-scored flags with escalation actions</p>",
-    unsafe_allow_html=True,
+st.caption(
+    "Natural-language queries over financial transaction data · "
+    "Adaptive execution plans · Risk-scored flags with escalation actions"
 )
 
 # Fixture mode banner
 if not api_live:
-    st.markdown(
-        '<div class="fixture-banner">⚡ <strong>Fixture mode</strong> — '
-        "Track A's API is not reachable at <code>localhost:8000</code>. "
+    st.info(
+        "**Fixture mode** — Track A's API is not reachable at `localhost:8000`. "
         "Results below are from a pre-computed fixture that matches the live AgentResponse schema exactly. "
-        "Start <code>uvicorn backend.main:app</code> and refresh to switch to live mode.</div>",
-        unsafe_allow_html=True,
+        "Start `uvicorn backend.main:app` and refresh to switch to live mode.",
+        icon="⚡",
     )
 
 # ---------------------------------------------------------------------------
@@ -340,12 +282,10 @@ st.markdown("**Quick queries:**")
 btn_cols = st.columns(len(EXAMPLE_QUERIES))
 for i, ex in enumerate(EXAMPLE_QUERIES):
     with btn_cols[i]:
-        st.markdown('<div class="example-btn">', unsafe_allow_html=True)
         if st.button(ex["label"], key=f"ex_{i}", use_container_width=True):
             st.session_state["query_prefill"] = ex["query"]
             st.session_state["pending_intent"] = ex.get("intent")
             st.rerun()
-        st.markdown("</div>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Execute query
@@ -395,89 +335,56 @@ elif "pending_intent" in st.session_state:
 
 if response:
     # Header: query + summary
-    st.markdown("---")
-    st.markdown(f"**Query:** *{response.get('query', '')}*")
+    st.divider()
 
     summary_text = response.get("summary", "")
     warnings     = response.get("warnings", [])
 
-    if summary_text:
-        st.markdown(
-            f'<div style="background:#1e293b;border-radius:8px;padding:14px 18px;'
-            f'border-left:4px solid #6366f1;margin-bottom:12px;">'
-            f'<strong>Summary:</strong> {summary_text}</div>',
-            unsafe_allow_html=True,
-        )
+    with st.container(border=True):
+        st.markdown(f"**Query:** *{response.get('query', '')}*")
+        if summary_text:
+            st.markdown(f"**Summary:** {summary_text}")
 
     for w in warnings:
         st.warning(w)
 
-    # Metrics row
+    # KPI row + risk distribution — resolves both live-tool and fixture key
+    # names (see frontend/components/theme.py::resolve_metric), so these no
+    # longer silently disagree or go blank depending on mode.
     metrics = response.get("metrics", {})
-    if metrics:
-        metric_keys = ["total_transactions", "total_customers", "flags_raised", "high_risk", "medium_risk", "low_risk"]
-        present = {k: metrics[k] for k in metric_keys if k in metrics}
-        if present:
-            m_cols = st.columns(len(present))
-            for col, (key, val) in zip(m_cols, present.items()):
-                col.metric(key.replace("_", " ").title(), f"{val:,}" if isinstance(val, int) else val)
-
-    # Risk distribution bar chart — shows HIGH/MEDIUM/LOW at a glance
-    _h = metrics.get("high", 0)
-    _m = metrics.get("medium", 0)
-    _l = metrics.get("low", 0)
-    if metrics and (_h or _m or _l):
-        import plotly.graph_objects as _go
-        _fig = _go.Figure(_go.Bar(
-            x=[_h, _m, _l],
-            y=["HIGH", "MEDIUM", "LOW"],
-            orientation="h",
-            marker_color=["#ef4444", "#f97316", "#f59e0b"],
-            text=[str(v) for v in [_h, _m, _l]],
-            textposition="outside",
-        ))
-        _fig.update_layout(
-            height=130, margin=dict(t=4, b=4, l=8, r=40),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            font=dict(color="#94a3b8", size=13), showlegend=False,
-            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-            yaxis=dict(showgrid=False),
-        )
-        st.plotly_chart(_fig, use_container_width=True)
+    render_kpi_row(metrics)
+    render_risk_distribution(metrics)
 
     # 1 — Execution plan trace (highest-value component, above results)
     render_plan_trace(response)
 
-    # 2 — Flag cards
-    st.markdown("---")
-    flags = response.get("flags", [])
-    if flags:
-        render_flag_cards(flags)
-    else:
-        # Graceful empty-result handling
-        no_flag_msg = summary_text or "No suspicious entities were flagged by this query."
-        st.success(f"✅ {no_flag_msg}")
-        if warnings:
+    # 2/3/4 — Flags / Charts / Tables, grouped into tabs below the trace panel
+    tab_flags, tab_charts, tab_tables = st.tabs(
+        ["🚩 Flagged Entities", "📊 Charts", "📋 Tables & Export"]
+    )
+
+    with tab_flags:
+        flags = response.get("flags", [])
+        if flags:
+            render_flag_cards(flags)
+        else:
+            # Graceful empty-result handling
+            no_flag_msg = summary_text or "No suspicious entities were flagged by this query."
+            st.success(no_flag_msg, icon="✅")
             for w in warnings:
                 st.info(w)
 
-    # 3 — Charts (Plotly JSON from AgentResponse.charts)
-    charts = response.get("charts", {})
-    render_charts(charts)
+    with tab_charts:
+        render_charts(response.get("charts", {}))
 
-    # 4 — Tables + exports
-    tables = response.get("tables", {})
-    render_tables(tables, response)
+    with tab_tables:
+        render_tables(response.get("tables", {}), response)
 
 elif not run_query:
     # Landing state — prompt the user
-    st.markdown("---")
-    st.markdown(
-        '<div style="text-align:center;padding:40px;color:#475569;">'
-        '<div style="font-size:48px;margin-bottom:16px;">🔎</div>'
-        '<div style="font-size:18px;font-weight:500;">Enter a query or click an example above</div>'
-        '<div style="font-size:14px;margin-top:8px;">The agent will build a custom execution plan, '
-        'run only the relevant tools, and return risk-scored flags with escalation actions.</div>'
-        '</div>',
-        unsafe_allow_html=True,
+    st.divider()
+    st.info(
+        "Enter a query or click an example above. The agent will build a custom execution plan, "
+        "run only the relevant tools, and return risk-scored flags with escalation actions.",
+        icon="🔎",
     )

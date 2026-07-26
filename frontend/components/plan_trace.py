@@ -19,13 +19,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-# Status badge colours
-_STATUS_COLOUR: dict[str, str] = {
-    "ok":      "#22c55e",   # green
-    "skipped": "#94a3b8",   # slate
-    "error":   "#ef4444",   # red
-    "pending": "#f59e0b",   # amber
-}
+from frontend.components.theme import PLAN_STEP_COLOR, PLAN_STEP_TEXT_ON, TEXT_MUTED
 
 _INTENT_LABEL: dict[str, str] = {
     "full_analysis":       "🔍 Full Analysis",
@@ -50,11 +44,11 @@ def render_plan_trace(response: dict) -> None:
     intent_str = intent_obj.get("intent", "unknown")
     parsed_by  = intent_obj.get("parsed_by", "?")
     label = (
-        f"🗺️ Execution Plan Trace — {_INTENT_LABEL.get(intent_str, intent_str)} "
+        f"Execution Plan Trace — {_INTENT_LABEL.get(intent_str, intent_str)} "
         f"(parsed by {parsed_by})"
     )
 
-    with st.expander(label, expanded=False):
+    with st.expander(label, expanded=False, icon="🗺️"):
         # ------------------------------------------------------------------
         # Intent summary row
         # ------------------------------------------------------------------
@@ -95,36 +89,37 @@ def render_plan_trace(response: dict) -> None:
         # ------------------------------------------------------------------
         steps = plan_obj.get("steps", [])
         if steps:
-            st.markdown("#### 🔧 Tool Steps")
+            st.subheader("Tool Steps", divider="grey")
             for i, step in enumerate(steps, 1):
                 status   = step.get("status", "pending")
-                colour   = _STATUS_COLOUR.get(status, "#94a3b8")
+                colour   = PLAN_STEP_COLOR.get(status, "#64748b")
+                text_col = PLAN_STEP_TEXT_ON.get(status, "#ffffff")
                 tool     = step.get("tool", "unknown")
                 reason   = step.get("reason", "")
                 duration = step.get("duration_ms")
                 dur_str  = f"`{duration} ms`" if duration is not None else "`—`"
 
-                badge = f'<span style="background:{colour};color:#000;border-radius:4px;padding:1px 7px;font-size:12px;font-weight:600;">{status.upper()}</span>'
+                badge = f'<span style="background:{colour};color:{text_col};border-radius:4px;padding:1px 7px;font-size:12px;font-weight:600;">{status.upper()}</span>'
                 st.markdown(
                     f"**{i}. `{tool}`** {badge} &nbsp;&nbsp;{dur_str}",
                     unsafe_allow_html=True,
                 )
-                st.markdown(f"<span style='color:#94a3b8;font-size:13px;margin-left:16px;'>↳ {reason}</span>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color:{TEXT_MUTED};font-size:13px;margin-left:16px;'>↳ {reason}</span>", unsafe_allow_html=True)
 
         # ------------------------------------------------------------------
         # Skipped tools
         # ------------------------------------------------------------------
         skipped = plan_obj.get("tools_considered_but_skipped", [])
         if skipped:
-            st.markdown("#### ⏭️ Tools Considered but Skipped")
+            st.subheader("Tools Considered but Skipped", divider="grey")
             for s in skipped:
-                st.markdown(f"- <span style='color:#94a3b8;'>{s}</span>", unsafe_allow_html=True)
+                st.markdown(f"- <span style='color:{TEXT_MUTED};'>{s}</span>", unsafe_allow_html=True)
 
         # ------------------------------------------------------------------
         # Re-planning decisions log
         # ------------------------------------------------------------------
         decisions = plan_obj.get("decisions", [])
         if decisions:
-            st.markdown("#### 🔄 Re-planning Decisions")
+            st.subheader("Re-planning Decisions", divider="grey")
             for d in decisions:
                 st.info(d)
