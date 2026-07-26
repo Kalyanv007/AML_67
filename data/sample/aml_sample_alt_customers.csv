@@ -1,0 +1,295 @@
+acct_id,cust_name,open_dt,segment,domicile,job_title,risk_tier,kyc_stat,pep_ind,exp_vol_monthly
+ACC-N0001,Ivan Alvarez,2016-07-26,CORP,SG,corporate banking,L,V,N,10593.65
+ACC-N0002,Nora Alvarez,2020-05-02,RETAIL,SG,nurse,L,V,N,10710.09
+ACC-N0003,Omar Alvarez,2020-09-22,RETAIL,GB,doctor,L,V,N,12680.63
+ACC-N0004,Priya Alvarez,2022-08-03,RETAIL,SG,teacher,L,P,N,20145.63
+ACC-N0005,Quincy Alvarez,2017-10-26,RETAIL,GB,nurse,M,V,N,29054.13
+ACC-N0006,Rosa Alvarez,2016-01-01,RETAIL,SG,student,L,V,N,8540.33
+ACC-N0007,Sami Alvarez,2019-04-12,CORP,DE,corporate banking,L,V,N,26458.86
+ACC-N0008,Talia Alvarez,2016-02-20,RETAIL,FR,software engineer,L,V,N,15726.82
+ACC-N0009,Ugo Alvarez,2021-03-11,RETAIL,DE,retail worker,L,V,N,7460.08
+ACC-N0010,Vera Alvarez,2016-01-24,RETAIL,JP,doctor,L,P,N,8170.72
+ACC-N0011,Walt Alvarez,2020-11-29,RETAIL,FR,teacher,L,V,N,14344.32
+ACC-N0012,Ximena Alvarez,2019-12-31,CORP,US,corporate banking,L,V,N,3571.0
+ACC-N0013,Yusuf Alvarez,2020-09-05,RETAIL,FR,doctor,L,V,N,23130.54
+ACC-N0014,Zoe Alvarez,2017-03-24,RETAIL,SG,consultant,L,V,N,4885.88
+ACC-N0015,Adrian Alvarez,2019-03-31,CORP,US,corporate banking,L,V,N,18689.21
+ACC-N0016,Bianca Alvarez,2019-01-20,CORP,FR,corporate banking,L,V,N,13709.64
+ACC-N0017,Cyrus Alvarez,2021-10-21,RETAIL,AU,student,L,V,N,15599.08
+ACC-N0018,Delia Alvarez,2020-07-04,RETAIL,AU,lawyer,L,V,N,72308.12
+ACC-N0019,Ewan Alvarez,2017-02-25,RETAIL,DE,doctor,L,V,N,14108.03
+ACC-N0020,Freya Alvarez,2019-10-10,RETAIL,CA,accountant,L,V,N,13075.46
+ACC-N0021,Gustavo Alvarez,2015-11-12,RETAIL,FR,lawyer,L,V,N,14570.13
+ACC-N0022,Hana Alvarez,2021-05-01,RETAIL,DE,contractor,L,P,N,13855.68
+ACC-N0023,Ilia Alvarez,2021-02-07,RETAIL,DE,contractor,L,V,N,38327.27
+ACC-N0024,Juno Alvarez,2015-12-21,CORP,CA,corporate banking,L,V,N,13479.99
+ACC-N0025,Kiran Alvarez,2019-10-12,RETAIL,AU,student,L,V,N,31881.44
+ACC-N0026,Lior Alvarez,2016-05-22,RETAIL,FR,retail worker,L,V,N,24213.98
+ACC-N0027,Mira Alvarez,2022-09-10,RETAIL,FR,nurse,L,V,N,12340.37
+ACC-N0028,Noah Alvarez,2021-02-04,RETAIL,AU,student,L,V,N,33806.7
+ACC-N0029,Opal Alvarez,2021-05-06,CORP,SG,corporate banking,L,I,N,7089.31
+ACC-N0030,Petra Alvarez,2016-07-10,RETAIL,FR,software engineer,L,V,N,12385.44
+ACC-N0031,Ivan Becker,2022-06-01,CORP,AU,corporate banking,L,V,N,10271.79
+ACC-N0032,Nora Becker,2022-05-10,RETAIL,AU,student,L,V,N,14086.12
+ACC-N0033,Omar Becker,2017-09-29,RETAIL,GB,accountant,L,V,N,8077.71
+ACC-N0034,Priya Becker,2021-08-07,RETAIL,SG,teacher,L,V,N,6504.88
+ACC-N0035,Quincy Becker,2021-03-02,CORP,FR,corporate banking,L,V,N,23035.4
+ACC-N0036,Rosa Becker,2016-01-06,RETAIL,FR,retail worker,H,V,N,8381.78
+ACC-N0037,Sami Becker,2015-07-16,CORP,US,corporate banking,L,V,Y,19473.14
+ACC-N0038,Talia Becker,2019-04-08,RETAIL,JP,retail worker,L,V,N,18123.47
+ACC-N0039,Ugo Becker,2015-01-05,RETAIL,JP,teacher,L,V,N,12531.75
+ACC-N0040,Vera Becker,2021-09-20,RETAIL,GB,doctor,L,V,N,6247.74
+ACC-N0041,Walt Becker,2017-05-08,RETAIL,DE,lawyer,L,V,N,930.11
+ACC-N0042,Ximena Becker,2022-12-06,RETAIL,US,consultant,L,P,N,14039.17
+ACC-N0043,Yusuf Becker,2020-12-31,RETAIL,GB,software engineer,L,V,N,26372.83
+ACC-N0044,Zoe Becker,2017-04-11,CORP,CA,corporate banking,L,V,N,13634.25
+ACC-N0045,Adrian Becker,2020-01-28,RETAIL,DE,consultant,L,V,N,19075.47
+ACC-N0046,Bianca Becker,2022-10-28,RETAIL,SG,accountant,L,V,N,14341.53
+ACC-N0047,Cyrus Becker,2020-07-08,RETAIL,GB,software engineer,L,V,N,45515.08
+ACC-N0048,Delia Becker,2016-11-15,RETAIL,JP,doctor,L,V,N,5463.98
+ACC-N0049,Ewan Becker,2019-10-23,RETAIL,DE,teacher,L,V,N,3818.6
+ACC-N0050,Freya Becker,2020-03-15,CORP,JP,corporate banking,L,V,N,9304.76
+ACC-N0051,Gustavo Becker,2019-05-12,RETAIL,AU,contractor,M,V,N,2971.04
+ACC-N0052,Hana Becker,2016-01-21,CORP,JP,corporate banking,L,V,N,27711.33
+ACC-N0053,Ilia Becker,2020-08-07,RETAIL,CA,nurse,L,V,N,10527.91
+ACC-N0054,Juno Becker,2015-09-23,RETAIL,CA,lawyer,L,V,N,20948.77
+ACC-N0055,Kiran Becker,2015-06-06,RETAIL,CA,doctor,L,V,N,14484.71
+ACC-N0056,Lior Becker,2015-12-11,RETAIL,CA,retail worker,L,V,N,11214.2
+ACC-N0057,Mira Becker,2018-06-18,RETAIL,AU,nurse,L,V,N,10669.68
+ACC-N0058,Noah Becker,2021-04-27,RETAIL,CA,teacher,M,P,N,14181.19
+ACC-N0059,Opal Becker,2018-11-20,RETAIL,FR,software engineer,L,V,N,24623.32
+ACC-N0060,Petra Becker,2022-02-05,RETAIL,JP,nurse,L,V,N,8349.33
+ACC-N0061,Ivan Chen,2017-11-19,RETAIL,GB,student,L,V,N,25847.64
+ACC-N0062,Nora Chen,2021-02-23,RETAIL,GB,nurse,L,V,N,20074.78
+ACC-N0063,Omar Chen,2017-12-08,CORP,US,corporate banking,L,I,Y,27869.27
+ACC-N0064,Priya Chen,2019-08-19,CORP,JP,corporate banking,L,V,N,18603.25
+ACC-N0065,Quincy Chen,2015-01-10,RETAIL,AU,consultant,L,V,N,7367.88
+ACC-N0066,Rosa Chen,2022-06-15,RETAIL,DE,lawyer,L,V,N,8582.62
+ACC-N0067,Sami Chen,2016-07-21,RETAIL,US,retail worker,L,V,N,25653.93
+ACC-N0068,Talia Chen,2015-03-31,CORP,DE,corporate banking,L,V,N,27426.74
+ACC-N0069,Ugo Chen,2022-03-11,RETAIL,US,contractor,L,V,N,12508.66
+ACC-N0070,Vera Chen,2020-05-22,RETAIL,SG,software engineer,L,P,N,10791.14
+ACC-N0071,Walt Chen,2018-12-07,RETAIL,GB,teacher,M,V,N,30236.41
+ACC-N0072,Ximena Chen,2020-10-20,RETAIL,DE,teacher,L,V,N,11301.15
+ACC-N0073,Yusuf Chen,2016-05-01,RETAIL,AU,teacher,M,V,N,11073.52
+ACC-N0074,Zoe Chen,2018-04-13,RETAIL,SG,contractor,L,V,N,21009.77
+ACC-N0075,Adrian Chen,2018-06-05,RETAIL,JP,teacher,M,V,N,11735.28
+ACC-N0076,Bianca Chen,2016-09-10,RETAIL,AU,doctor,M,V,N,13013.29
+ACC-N0077,Cyrus Chen,2017-06-29,RETAIL,CA,contractor,L,V,N,10447.47
+ACC-N0078,Delia Chen,2019-02-23,CORP,US,corporate banking,L,V,N,7742.43
+ACC-N0079,Ewan Chen,2016-07-04,RETAIL,SG,contractor,L,I,N,2195.4
+ACC-N0080,Freya Chen,2019-05-02,RETAIL,SG,doctor,L,V,N,8969.46
+ACC-N0081,Gustavo Chen,2017-05-05,RETAIL,DE,contractor,M,V,N,5377.54
+ACC-N0082,Hana Chen,2020-08-17,CORP,FR,corporate banking,L,V,N,6496.1
+ACC-N0083,Ilia Chen,2017-03-20,RETAIL,AU,contractor,L,V,N,11082.45
+ACC-N0084,Juno Chen,2018-09-30,RETAIL,GB,lawyer,L,V,N,7606.8
+ACC-N0085,Kiran Chen,2016-09-13,CORP,JP,corporate banking,L,V,N,7796.42
+ACC-N0086,Lior Chen,2018-11-08,RETAIL,GB,teacher,L,V,N,12547.8
+ACC-N0087,Mira Chen,2015-04-22,RETAIL,FR,nurse,M,V,N,19615.44
+ACC-N0088,Noah Chen,2019-12-14,CORP,CA,corporate banking,L,V,N,21588.36
+ACC-N0089,Opal Chen,2015-05-31,RETAIL,AU,teacher,L,V,N,10947.29
+ACC-N0090,Petra Chen,2022-05-15,RETAIL,DE,software engineer,L,V,N,20317.32
+ACC-N0091,Ivan Dubois,2016-11-24,RETAIL,FR,software engineer,M,V,N,25524.22
+ACC-N0092,Nora Dubois,2022-07-23,RETAIL,US,student,L,V,N,10921.84
+ACC-N0093,Omar Dubois,2018-11-14,RETAIL,CA,contractor,L,V,N,13678.82
+ACC-N0094,Priya Dubois,2021-07-01,CORP,JP,corporate banking,H,V,N,22867.83
+ACC-N0095,Quincy Dubois,2021-08-21,RETAIL,SG,doctor,L,V,N,18433.98
+ACC-N0096,Rosa Dubois,2018-02-24,RETAIL,SG,consultant,L,V,N,11733.1
+ACC-N0097,Sami Dubois,2021-06-05,RETAIL,FR,doctor,L,V,N,11875.82
+ACC-N0098,Talia Dubois,2020-10-23,RETAIL,US,student,L,V,N,11296.98
+ACC-N0099,Ugo Dubois,2018-01-28,RETAIL,SG,lawyer,L,V,N,41663.36
+ACC-N0100,Vera Dubois,2018-04-22,RETAIL,GB,lawyer,L,V,N,16149.77
+ACC-N0101,Walt Dubois,2019-05-03,RETAIL,FR,student,L,V,N,28969.79
+ACC-N0102,Ximena Dubois,2017-02-20,RETAIL,US,teacher,L,V,N,7844.02
+ACC-N0103,Yusuf Dubois,2019-07-20,RETAIL,DE,teacher,L,V,N,16413.05
+ACC-N0104,Zoe Dubois,2020-10-26,CORP,DE,corporate banking,L,I,N,11522.24
+ACC-N0105,Adrian Dubois,2021-08-01,RETAIL,US,teacher,M,V,N,11501.18
+ACC-N0106,Bianca Dubois,2017-11-10,RETAIL,SG,student,L,V,N,12377.08
+ACC-N0107,Cyrus Dubois,2021-03-09,RETAIL,JP,student,L,V,N,6831.34
+ACC-N0108,Delia Dubois,2020-11-29,RETAIL,CA,lawyer,L,V,N,13410.3
+ACC-N0109,Ewan Dubois,2020-03-08,RETAIL,AU,nurse,L,V,N,22790.46
+ACC-N0110,Freya Dubois,2018-06-09,RETAIL,GB,consultant,L,V,N,9806.04
+ACC-N0111,Gustavo Dubois,2021-07-17,RETAIL,GB,lawyer,L,V,N,13374.32
+ACC-N0112,Hana Dubois,2022-06-13,RETAIL,FR,student,L,V,N,13567.37
+ACC-N0113,Ilia Dubois,2019-07-04,RETAIL,JP,consultant,L,V,N,15649.08
+ACC-N0114,Juno Dubois,2021-04-27,RETAIL,CA,student,L,V,N,16941.97
+ACC-N0115,Kiran Dubois,2016-03-26,CORP,DE,corporate banking,M,I,N,14766.77
+ACC-N0116,Lior Dubois,2022-05-24,RETAIL,SG,student,L,V,N,17970.85
+ACC-N0117,Mira Dubois,2015-08-05,RETAIL,JP,contractor,L,V,N,21297.34
+ACC-N0118,Noah Dubois,2020-12-27,RETAIL,AU,nurse,L,V,N,6779.4
+ACC-N0119,Opal Dubois,2018-02-13,RETAIL,JP,doctor,L,V,N,20132.72
+ACC-N0120,Petra Dubois,2015-12-13,RETAIL,FR,accountant,L,V,N,14462.95
+ACC-N0121,Ivan Eriksen,2015-11-26,RETAIL,CA,accountant,L,V,N,14931.73
+ACC-N0122,Nora Eriksen,2021-08-14,RETAIL,US,nurse,H,V,N,14673.34
+ACC-N0123,Omar Eriksen,2022-04-12,RETAIL,CA,retail worker,L,V,N,14508.21
+ACC-N0124,Priya Eriksen,2015-09-26,CORP,FR,corporate banking,H,V,N,9797.36
+ACC-N0125,Quincy Eriksen,2021-01-15,RETAIL,DE,doctor,L,V,N,13614.03
+ACC-N0126,Rosa Eriksen,2019-06-18,RETAIL,JP,contractor,L,V,N,8031.38
+ACC-N0127,Sami Eriksen,2019-05-05,RETAIL,CA,teacher,L,V,N,14987.36
+ACC-N0128,Talia Eriksen,2016-06-29,RETAIL,CA,teacher,L,V,N,29041.14
+ACC-N0129,Ugo Eriksen,2015-05-31,CORP,GB,corporate banking,L,V,N,14080.06
+ACC-N0130,Vera Eriksen,2021-06-02,RETAIL,FR,accountant,L,V,N,29024.11
+ACC-N0131,Walt Eriksen,2022-05-10,RETAIL,FR,software engineer,M,V,N,16586.54
+ACC-N0132,Ximena Eriksen,2020-03-12,RETAIL,US,nurse,L,V,N,26706.25
+ACC-N0133,Yusuf Eriksen,2021-04-06,RETAIL,CA,lawyer,L,V,Y,6053.79
+ACC-N0134,Zoe Eriksen,2019-11-14,RETAIL,GB,nurse,L,V,N,15503.62
+ACC-N0135,Adrian Eriksen,2018-04-10,RETAIL,FR,consultant,L,P,N,13433.32
+ACC-N0136,Bianca Eriksen,2016-06-11,RETAIL,FR,accountant,L,V,N,8710.14
+ACC-N0137,Cyrus Eriksen,2019-07-02,CORP,DE,corporate banking,L,V,N,15429.66
+ACC-N0138,Delia Eriksen,2017-11-01,RETAIL,US,lawyer,L,V,Y,20093.46
+ACC-N0139,Ewan Eriksen,2018-01-27,RETAIL,DE,consultant,L,V,N,30685.7
+ACC-N0140,Freya Eriksen,2020-09-07,RETAIL,AU,consultant,L,V,N,13947.23
+ACC-N0141,Gustavo Eriksen,2018-04-08,RETAIL,GB,software engineer,L,V,N,17805.98
+ACC-N0142,Hana Eriksen,2015-05-30,RETAIL,DE,doctor,M,P,N,7948.66
+ACC-N0143,Ilia Eriksen,2017-12-13,CORP,DE,corporate banking,L,V,N,25041.1
+ACC-N0144,Juno Eriksen,2018-05-14,CORP,GB,corporate banking,L,V,Y,20221.76
+ACC-N0145,Kiran Eriksen,2021-08-10,RETAIL,GB,accountant,L,V,N,30969.76
+ACC-N0146,Lior Eriksen,2019-10-16,CORP,DE,corporate banking,L,V,N,19099.26
+ACC-N0147,Mira Eriksen,2017-11-10,RETAIL,CA,student,L,V,N,6953.3
+ACC-N0148,Noah Eriksen,2015-10-26,RETAIL,DE,retail worker,M,V,N,10605.61
+ACC-N0149,Opal Eriksen,2017-12-17,RETAIL,DE,teacher,L,V,N,20799.15
+ACC-N0150,Petra Eriksen,2015-06-12,RETAIL,US,software engineer,L,I,N,10811.72
+ACC-N0151,Ivan Farrell,2015-04-05,RETAIL,FR,lawyer,L,P,N,7142.77
+ACC-N0152,Nora Farrell,2017-08-28,RETAIL,JP,retail worker,H,V,N,24981.59
+ACC-N0153,Omar Farrell,2015-03-11,RETAIL,SG,software engineer,L,V,N,17762.05
+ACC-N0154,Priya Farrell,2019-01-17,RETAIL,GB,teacher,L,V,N,11816.63
+ACC-N0155,Quincy Farrell,2021-01-23,RETAIL,DE,lawyer,L,V,N,6826.06
+ACC-N0156,Rosa Farrell,2020-02-23,RETAIL,AU,teacher,M,I,N,42826.61
+ACC-N0157,Sami Farrell,2015-02-19,RETAIL,FR,doctor,L,V,N,16088.36
+ACC-N0158,Talia Farrell,2020-01-07,RETAIL,DE,nurse,L,V,N,5986.0
+ACC-N0159,Ugo Farrell,2017-09-04,RETAIL,US,consultant,L,V,N,15250.39
+ACC-N0160,Vera Farrell,2016-02-14,RETAIL,SG,software engineer,L,V,N,20732.07
+ACC-N0161,Walt Farrell,2020-03-20,RETAIL,JP,consultant,L,V,N,4190.56
+ACC-N0162,Ximena Farrell,2019-03-01,RETAIL,GB,consultant,L,V,N,28264.92
+ACC-N0163,Yusuf Farrell,2017-04-21,RETAIL,SG,teacher,L,V,N,27957.84
+ACC-N0164,Zoe Farrell,2015-09-04,RETAIL,DE,nurse,L,V,N,26378.35
+ACC-N0165,Adrian Farrell,2017-04-21,RETAIL,FR,accountant,L,V,N,8337.53
+ACC-N0166,Bianca Farrell,2020-05-17,RETAIL,DE,doctor,L,P,N,10508.7
+ACC-N0167,Cyrus Farrell,2019-09-15,RETAIL,SG,lawyer,L,P,N,14959.97
+ACC-N0168,Delia Farrell,2019-03-22,RETAIL,AU,software engineer,L,V,N,19209.82
+ACC-N0169,Ewan Farrell,2015-09-08,RETAIL,SG,software engineer,L,V,N,12323.05
+ACC-N0170,Freya Farrell,2020-05-22,RETAIL,JP,doctor,L,V,N,15607.68
+ACC-N0171,Gustavo Farrell,2021-06-03,RETAIL,FR,teacher,L,P,N,14496.11
+ACC-N0172,Hana Farrell,2020-11-28,RETAIL,DE,student,L,V,N,8570.61
+ACC-N0173,Ilia Farrell,2019-12-05,RETAIL,GB,doctor,L,V,N,14817.26
+ACC-N0174,Juno Farrell,2022-09-02,CORP,SG,corporate banking,L,V,N,6696.15
+ACC-N0175,Kiran Farrell,2016-04-21,RETAIL,AU,lawyer,L,V,N,20215.09
+ACC-N0176,Lior Farrell,2016-07-07,RETAIL,DE,lawyer,L,V,N,35113.3
+ACC-N0177,Mira Farrell,2020-04-29,RETAIL,JP,consultant,M,V,N,10388.3
+ACC-N0178,Noah Farrell,2016-02-18,RETAIL,SG,student,L,V,N,8624.97
+ACC-N0179,Opal Farrell,2019-01-26,CORP,DE,corporate banking,L,V,N,57236.86
+ACC-N0180,Petra Farrell,2015-06-03,CORP,FR,corporate banking,L,V,N,9804.14
+ACC-N0181,Ivan Gomez,2015-07-03,RETAIL,SG,retail worker,L,V,N,21784.25
+ACC-N0182,Nora Gomez,2017-03-29,CORP,GB,corporate banking,L,V,N,9955.58
+ACC-N0183,Omar Gomez,2021-07-09,CORP,GB,corporate banking,H,I,N,9049.49
+ACC-N0184,Priya Gomez,2015-07-18,RETAIL,GB,doctor,L,V,N,13896.4
+ACC-N0185,Quincy Gomez,2022-07-25,RETAIL,JP,software engineer,L,V,N,3198.64
+ACC-N0186,Rosa Gomez,2019-08-24,RETAIL,AU,nurse,L,V,N,26074.2
+ACC-N0187,Sami Gomez,2021-10-13,RETAIL,JP,consultant,L,V,N,27310.25
+ACC-N0188,Talia Gomez,2020-12-11,RETAIL,SG,contractor,L,V,N,8743.51
+ACC-N0189,Ugo Gomez,2018-03-26,RETAIL,GB,contractor,L,V,N,9742.94
+ACC-N0190,Vera Gomez,2015-02-22,RETAIL,FR,software engineer,L,V,N,10620.07
+ACC-N0191,Walt Gomez,2020-09-19,RETAIL,AU,lawyer,H,V,N,12384.2
+ACC-N0192,Ximena Gomez,2019-07-09,CORP,DE,corporate banking,L,I,N,7708.8
+ACC-N0193,Yusuf Gomez,2021-06-15,RETAIL,AU,nurse,L,V,N,23129.34
+ACC-N0194,Zoe Gomez,2018-04-18,CORP,DE,corporate banking,L,V,N,19016.13
+ACC-N0195,Adrian Gomez,2018-02-15,RETAIL,JP,nurse,L,V,N,8015.58
+ACC-N0196,Bianca Gomez,2021-09-16,RETAIL,US,nurse,L,V,N,30829.77
+ACC-N0197,Cyrus Gomez,2021-09-17,CORP,DE,corporate banking,L,V,N,36796.22
+ACC-N0198,Delia Gomez,2018-07-13,RETAIL,CA,nurse,L,V,N,8722.51
+ACC-N0199,Ewan Gomez,2017-12-05,CORP,JP,corporate banking,L,V,N,10347.06
+ACC-N0200,Freya Gomez,2017-12-07,RETAIL,CA,doctor,L,I,N,11124.75
+ACC-N0201,Gustavo Gomez,2019-02-17,RETAIL,JP,lawyer,L,I,N,8260.26
+ACC-N0202,Hana Gomez,2019-05-30,RETAIL,DE,retail worker,L,V,N,9488.24
+ACC-N0203,Ilia Gomez,2020-09-20,RETAIL,AU,accountant,M,V,N,15466.15
+ACC-N0204,Juno Gomez,2020-06-16,RETAIL,SG,teacher,L,P,N,14156.86
+ACC-N0205,Kiran Gomez,2018-07-08,RETAIL,CA,accountant,M,V,N,18308.96
+ACC-N0206,Lior Gomez,2016-07-31,CORP,GB,corporate banking,L,V,N,5189.1
+ACC-N0207,Mira Gomez,2015-10-11,RETAIL,SG,teacher,L,V,N,22118.64
+ACC-N0208,Noah Gomez,2021-02-23,RETAIL,CA,student,L,V,N,11324.09
+ACC-N0209,Opal Gomez,2022-04-20,RETAIL,JP,lawyer,L,V,N,4208.62
+ACC-N0210,Petra Gomez,2022-03-19,RETAIL,AU,contractor,L,V,N,24067.57
+ACC-N0211,Ivan Haddad,2015-11-15,RETAIL,GB,student,L,V,N,14113.8
+ACC-N0212,Nora Haddad,2021-08-31,RETAIL,GB,lawyer,H,V,N,14040.75
+ACC-N0213,Omar Haddad,2020-07-06,RETAIL,US,contractor,L,V,N,16928.7
+ACC-N0214,Priya Haddad,2015-02-13,RETAIL,FR,nurse,L,V,N,14655.14
+ACC-N0215,Quincy Haddad,2020-10-21,RETAIL,JP,nurse,L,V,N,5683.39
+ACC-N0216,Rosa Haddad,2018-12-26,RETAIL,FR,software engineer,L,P,N,12768.19
+ACC-N0217,Sami Haddad,2017-09-20,RETAIL,JP,doctor,L,V,N,7287.94
+ACC-N0218,Talia Haddad,2019-09-03,RETAIL,JP,consultant,L,V,N,17866.55
+ACC-N0219,Ugo Haddad,2015-02-22,RETAIL,AU,software engineer,L,V,Y,17889.54
+ACC-N0220,Vera Haddad,2020-04-03,RETAIL,DE,lawyer,L,V,N,5169.31
+ACC-STR01,Walt Haddad,2016-08-18,RETAIL,GB,lawyer,L,V,Y,9396.75
+ACC-STR02,Ximena Haddad,2018-10-21,RETAIL,SG,software engineer,L,V,N,35028.44
+ACC-STR03,Yusuf Haddad,2016-06-15,RETAIL,FR,student,L,P,Y,30548.75
+ACC-STR04,Zoe Haddad,2020-02-22,RETAIL,DE,contractor,L,P,N,27812.31
+ACC-STR05,Adrian Haddad,2018-09-07,RETAIL,FR,lawyer,L,V,N,9166.34
+ACC-STR06,Bianca Haddad,2017-12-09,RETAIL,GB,contractor,L,V,N,56326.1
+ACC-STR07,Cyrus Haddad,2018-06-02,RETAIL,FR,retail worker,L,V,N,31949.46
+ACC-STR08,Delia Haddad,2021-01-10,RETAIL,FR,consultant,H,V,N,2470.71
+ACC-STR09,Ewan Haddad,2021-09-16,RETAIL,CA,nurse,L,V,N,58491.91
+ACC-STR10,Freya Haddad,2018-11-24,RETAIL,CA,accountant,L,V,N,50349.64
+ACC-STR11,Gustavo Haddad,2015-09-14,RETAIL,SG,teacher,L,V,N,40241.58
+ACC-STR12,Hana Haddad,2019-10-24,RETAIL,AU,doctor,L,V,N,54006.52
+ACC-HUB01,Ilia Haddad,2020-04-13,CORP,US,corporate banking,L,V,N,38281.89
+ACC-HUB02,Juno Haddad,2019-03-19,CORP,FR,corporate banking,L,V,N,19393.55
+ACC-HUB03,Kiran Haddad,2022-02-02,CORP,JP,corporate banking,L,V,N,55314.94
+ACC-HUB04,Lior Haddad,2015-05-21,CORP,CA,corporate banking,L,V,N,19413.49
+ACC-SMF01,Mira Haddad,2022-02-11,RETAIL,FR,accountant,M,I,N,12218.13
+ACC-SMF02,Noah Haddad,2019-08-03,RETAIL,SG,student,L,V,N,13299.28
+ACC-SMF03,Opal Haddad,2022-10-02,RETAIL,DE,consultant,L,V,N,6280.34
+ACC-SMF04,Petra Haddad,2019-11-28,RETAIL,SG,consultant,M,V,N,7665.37
+ACC-SMF05,Ivan Ibarra,2021-02-27,RETAIL,DE,doctor,L,V,N,20158.76
+ACC-SMF06,Nora Ibarra,2020-12-27,RETAIL,FR,doctor,L,V,N,10803.38
+ACC-SMF07,Omar Ibarra,2020-01-07,RETAIL,CA,retail worker,M,V,N,13109.1
+ACC-SMF08,Priya Ibarra,2022-03-26,RETAIL,JP,doctor,L,V,N,8651.93
+ACC-SMF09,Quincy Ibarra,2017-05-15,RETAIL,FR,doctor,L,V,N,13930.39
+ACC-SMF10,Rosa Ibarra,2016-06-22,RETAIL,US,doctor,L,V,N,13532.77
+ACC-SMF11,Sami Ibarra,2019-03-12,RETAIL,FR,doctor,L,V,N,23623.73
+ACC-SMF12,Talia Ibarra,2016-07-25,RETAIL,SG,contractor,L,V,N,13138.96
+ACC-SMF13,Ugo Ibarra,2021-08-20,RETAIL,DE,nurse,L,V,N,20180.35
+ACC-SMF14,Vera Ibarra,2020-09-06,RETAIL,AU,teacher,M,V,N,20698.14
+ACC-SMF15,Walt Ibarra,2015-03-21,RETAIL,GB,lawyer,H,V,N,14382.58
+ACC-SMF16,Ximena Ibarra,2015-11-30,RETAIL,JP,nurse,L,P,N,7100.39
+ACC-SMF17,Yusuf Ibarra,2022-12-16,RETAIL,SG,contractor,M,V,N,14394.87
+ACC-SMF18,Zoe Ibarra,2019-09-07,RETAIL,AU,retail worker,L,V,N,28441.13
+ACC-SMF19,Adrian Ibarra,2020-08-10,RETAIL,DE,contractor,M,P,N,14806.62
+ACC-SMF20,Bianca Ibarra,2016-06-17,RETAIL,CA,consultant,L,V,N,3681.97
+ACC-SMF21,Cyrus Ibarra,2017-11-06,RETAIL,JP,doctor,L,V,N,9473.77
+ACC-SMF22,Delia Ibarra,2020-02-24,RETAIL,JP,retail worker,L,P,N,10036.85
+ACC-SMF23,Ewan Ibarra,2021-01-13,RETAIL,DE,consultant,L,V,N,13119.03
+ACC-SMF24,Freya Ibarra,2021-05-28,RETAIL,CA,doctor,M,V,N,16398.39
+ACC-LAY01,Gustavo Ibarra,2019-09-01,CORP,AU,corporate banking,L,V,N,52997.52
+ACC-LAY02,Hana Ibarra,2018-08-26,CORP,CA,corporate banking,L,P,N,51180.1
+ACC-LAY03,Ilia Ibarra,2018-04-28,CORP,JP,corporate banking,L,V,N,50932.68
+ACC-LAY04,Juno Ibarra,2018-04-25,CORP,FR,corporate banking,L,V,N,5156.26
+ACC-LAY05,Kiran Ibarra,2022-09-03,CORP,FR,corporate banking,L,V,N,38727.42
+ACC-LAY06,Lior Ibarra,2017-06-08,CORP,JP,corporate banking,L,V,N,15174.54
+ACC-LAY07,Mira Ibarra,2019-10-14,CORP,AU,corporate banking,L,V,N,33236.05
+ACC-LAY08,Noah Ibarra,2022-01-02,CORP,FR,corporate banking,L,V,N,22991.05
+ACC-LAY09,Opal Ibarra,2021-11-17,CORP,GB,corporate banking,L,V,N,21281.31
+ACC-LAY10,Petra Ibarra,2015-04-18,CORP,FR,corporate banking,M,I,N,79209.6
+ACC-LAY11,Ivan Jansen,2020-12-09,CORP,AU,corporate banking,L,V,N,28896.17
+ACC-LAY12,Nora Jansen,2021-08-07,CORP,AU,corporate banking,M,V,N,20510.26
+ACC-LAY13,Omar Jansen,2021-01-16,CORP,US,corporate banking,L,V,N,137838.21
+ACC-LAY14,Priya Jansen,2015-05-15,CORP,FR,corporate banking,L,V,N,64142.6
+ACC-LAY15,Quincy Jansen,2021-01-14,CORP,JP,corporate banking,L,V,N,77117.4
+ACC-LAY16,Rosa Jansen,2017-01-14,CORP,FR,corporate banking,M,V,N,14005.31
+ACC-LAY17,Sami Jansen,2016-01-18,CORP,US,corporate banking,L,V,N,16469.03
+ACC-LAY18,Talia Jansen,2020-09-27,CORP,JP,corporate banking,L,V,N,11571.95
+ACC-LAY19,Ugo Jansen,2021-09-11,CORP,DE,corporate banking,L,V,N,8197.34
+ACC-LAY20,Vera Jansen,2016-12-20,CORP,JP,corporate banking,L,V,N,13758.49
+ACC-LAY21,Walt Jansen,2015-05-18,CORP,FR,corporate banking,L,V,N,32390.63
+ACC-LAY22,Ximena Jansen,2017-09-09,CORP,DE,corporate banking,M,V,N,13595.31
+ACC-LAY23,Yusuf Jansen,2017-02-05,CORP,AU,corporate banking,L,V,N,24628.67
+ACC-LAY24,Zoe Jansen,2019-09-28,CORP,JP,corporate banking,L,V,N,14075.11
+ACC-RCO01,Adrian Jansen,2016-10-04,CORP,DE,corporate banking,M,V,N,23831.93
+ACC-RCO02,Bianca Jansen,2020-01-06,CORP,AU,corporate banking,L,V,N,44580.02
+ACC-RCO03,Cyrus Jansen,2019-03-25,CORP,FR,corporate banking,M,V,N,21444.26
+ACC-RCO04,Delia Jansen,2020-07-02,CORP,DE,corporate banking,L,V,N,39805.64
+ACC-RCO05,Ewan Jansen,2020-07-06,CORP,DE,corporate banking,L,V,N,31712.19
+ACC-RCO06,Freya Jansen,2015-03-05,CORP,DE,corporate banking,L,V,N,21844.56
+ACC-RCO07,Gustavo Jansen,2018-09-24,CORP,US,corporate banking,M,V,N,34787.34
+ACC-RCO08,Hana Jansen,2018-07-10,CORP,SG,corporate banking,L,V,N,36966.04
+ACC-RCO09,Ilia Jansen,2018-01-31,CORP,AU,corporate banking,L,V,N,23588.7
+ACC-RCO10,Juno Jansen,2019-01-25,CORP,FR,corporate banking,L,V,N,31069.39

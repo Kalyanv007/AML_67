@@ -51,6 +51,14 @@ _SYNTHETIC_FILE = Path(__file__).parent.parent.parent / "data" / "sample" / \
 _SYNTHETIC_CUSTOMERS_FILE = Path(__file__).parent.parent.parent / "data" / \
     "sample" / "aml_sample_customers.csv"
 
+# Alt-schema synthetic sample — same patterns, different raw column names/
+# encodings (data/generate_synthetic_alt.py). Used to prove the canonical
+# schema is reachable from a differently-named raw source via an adapter.
+_SYNTHETIC_ALT_FILE = Path(__file__).parent.parent.parent / "data" / "sample" / \
+    "aml_sample_alt.csv"
+_SYNTHETIC_ALT_CUSTOMERS_FILE = Path(__file__).parent.parent.parent / "data" / \
+    "sample" / "aml_sample_alt_customers.csv"
+
 # Parquet cache for the stratified IBM sample (data/processed/ is gitignored).
 # load_data(source='ibm_stratified') reads this if present, writes it on first build.
 _PROCESSED_DIR        = Path(__file__).parent.parent.parent / "data" / "processed"
@@ -584,6 +592,66 @@ def _adapt_synthetic(
 
 
 # ---------------------------------------------------------------------------
+# Synthetic Adapter — alt raw schema
+# ---------------------------------------------------------------------------
+
+_ALT_TXN_TYPE_MAP = {"DEP": "deposit", "WD": "withdrawal", "XFER": "transfer", "WIRE": "wire", "CSH": "cash"}
+_ALT_CHANNEL_MAP = {"ATM": "atm", "BRN": "branch", "ONL": "online", "MOB": "mobile", "WR": "wire"}
+_ALT_CUSTOMER_TYPE_MAP = {"RETAIL": "individual", "CORP": "business"}
+_ALT_RISK_MAP = {"L": "low", "M": "medium", "H": "high"}
+_ALT_KYC_MAP = {"V": "verified", "P": "pending", "I": "incomplete"}
+
+
+def _adapt_synthetic_alt(
+    trans_path: str = str(_SYNTHETIC_ALT_FILE),
+    customers_path: str = str(_SYNTHETIC_ALT_CUSTOMERS_FILE),
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Pure adapter: data/generate_synthetic_alt.py's raw CSVs → canonical DFs.
+
+    Unlike `_adapt_synthetic`, this source uses a deliberately different raw
+    column-naming/encoding convention (renamed headers, coded enums, Y/N
+    flags, 'ACC-' id prefix, no `is_cross_border` column) to prove the
+    canonical schema is reachable from a differently-shaped raw dataset via
+    an adapter — real mapping, not just type coercion.
+    """
+    raw = pd.read_csv(trans_path)
+
+    tx = pd.DataFrame()
+    tx["txn_id"] = raw["ref_no"]
+    tx["timestamp"] = pd.to_datetime(raw["event_ts"])
+    tx["sender_id"] = raw["debit_acct"].str.replace("^ACC-", "C-", regex=True)
+    tx["receiver_id"] = raw["credit_acct"].str.replace("^ACC-", "C-", regex=True)
+    tx["amount"] = raw["txn_value"].astype(float)
+    tx["currency"] = raw["ccy"]
+    tx["txn_type"] = raw["activity_code"].map(_ALT_TXN_TYPE_MAP)
+    tx["channel"] = raw["channel_cd"].map(_ALT_CHANNEL_MAP)
+    tx["sender_country"] = raw["orig_ctry"]
+    tx["receiver_country"] = raw["dest_ctry"]
+    tx["is_cross_border"] = tx["sender_country"] != tx["receiver_country"]
+    tx["label_is_laundering"] = raw["aml_flag"].map({"Y": True, "N": False}).where(
+        raw["aml_flag"].isin(["Y", "N"]), None
+    )
+    tx["pattern_label"] = raw["typology"].map(
+        lambda v: v.lower() if isinstance(v, str) and v else None
+    )
+
+    cust_raw = pd.read_csv(customers_path)
+    cust = pd.DataFrame()
+    cust["customer_id"] = cust_raw["acct_id"].str.replace("^ACC-", "C-", regex=True)
+    cust["name"] = cust_raw["cust_name"]
+    cust["account_open_date"] = pd.to_datetime(cust_raw["open_dt"]).dt.date
+    cust["customer_type"] = cust_raw["segment"].map(_ALT_CUSTOMER_TYPE_MAP)
+    cust["country"] = cust_raw["domicile"]
+    cust["occupation"] = cust_raw["job_title"]
+    cust["risk_rating"] = cust_raw["risk_tier"].map(_ALT_RISK_MAP)
+    cust["kyc_status"] = cust_raw["kyc_stat"].map(_ALT_KYC_MAP)
+    cust["is_pep"] = cust_raw["pep_ind"].map({"Y": True, "N": False})
+    cust["expected_monthly_volume"] = cust_raw["exp_vol_monthly"].astype(float)
+
+    return tx, cust
+
+
+# ---------------------------------------------------------------------------
 # Validation helper
 # ---------------------------------------------------------------------------
 
@@ -659,10 +727,12 @@ def _validate_canonical(tx_df: pd.DataFrame, cust_df: pd.DataFrame) -> list[str]
     name="load_data",
     params={
         "source": (
-            "str — 'ibm' | 'ibm_stratified' | 'synthetic'. "
+            "str — 'ibm' | 'ibm_stratified' | 'synthetic' | 'synthetic_alt'. "
             "'ibm_stratified' loads a stratified sample of the IBM HI-Small dataset "
             "with over-represented laundering-positive customers for real-data testing. "
-            "Uses a parquet cache (data/processed/) when available for fast loads (~2s vs ~153s)."
+            "Uses a parquet cache (data/processed/) when available for fast loads (~2s vs ~153s). "
+            "'synthetic_alt' loads a second synthetic dataset with a different raw column-naming/"
+            "encoding convention (aml_sample_alt.csv), adapted to the same canonical schema."
         ),
         "nrows": "int | None — if set, load only this many transaction rows (ibm source only, for testing).",
         "target_size": (
@@ -687,7 +757,7 @@ def _validate_canonical(tx_df: pd.DataFrame, cust_df: pd.DataFrame) -> list[str]
 )
 def load_data(
     ctx: ToolContext,
-    source: str = "synthetic",
+    source: str = "synthetic_alt",
     nrows: Optional[int] = None,
     target_size: int = 200_000,
     max_pos_customers: int = 500,
@@ -700,7 +770,7 @@ def load_data(
     Parameters
     ----------
     ctx               : ToolContext — executor-managed context; df and customers will be set.
-    source            : 'ibm', 'ibm_stratified', or 'synthetic'
+    source            : 'ibm', 'ibm_stratified', 'synthetic', or 'synthetic_alt'
     nrows             : optional row limit for 'ibm' source (smoke-testing, sequential rows)
     target_size       : approximate transaction count for 'ibm_stratified' (default 200,000)
     max_pos_customers : max positive customers for 'ibm_stratified' (default 500)
@@ -798,10 +868,22 @@ def load_data(
             tx_df, cust_df = _adapt_synthetic()
             source_label = "synthetic (aml_sample.csv)"
 
+        elif source == "synthetic_alt":
+            if not _SYNTHETIC_ALT_FILE.exists():
+                return ToolResult(
+                    ok=False,
+                    error=(
+                        f"Alt synthetic dataset not found at {_SYNTHETIC_ALT_FILE}. "
+                        "Run: python data/generate_synthetic_alt.py"
+                    ),
+                )
+            tx_df, cust_df = _adapt_synthetic_alt()
+            source_label = "synthetic (aml_sample_alt.csv)"
+
         else:
             return ToolResult(
                 ok=False,
-                error=f"Unknown source '{source}'. Valid values: 'ibm', 'synthetic'.",
+                error=f"Unknown source '{source}'. Valid values: 'ibm', 'ibm_stratified', 'synthetic', 'synthetic_alt'.",
             )
 
         # Schema validation

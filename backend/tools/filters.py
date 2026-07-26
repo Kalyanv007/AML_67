@@ -73,6 +73,8 @@ def _filter_countries(
     countries: list[str],
 ) -> tuple[pd.DataFrame, list[str]]:
     notes: list[str] = []
+    # Same "all" sentinel issue as txn_types — see _filter_txn_types.
+    countries = [c for c in (countries or []) if c and c.lower() != "all"]
     if not countries:
         return df, notes
     original = len(df)
@@ -91,6 +93,11 @@ def _filter_txn_types(
     txn_types: list[str],
 ) -> tuple[pd.DataFrame, list[str]]:
     notes: list[str] = []
+    # The LLM intent parser sometimes emits a literal "all" sentinel to mean
+    # "no restriction" rather than omitting the field. "all" isn't a real
+    # txn_type value, so isin() would match zero rows and empty the dataset —
+    # treat it (and any other non-values) as no-op instead.
+    txn_types = [t for t in (txn_types or []) if t and t.lower() != "all"]
     if not txn_types:
         return df, notes
     original = len(df)

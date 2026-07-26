@@ -54,7 +54,12 @@ _SCHEMA_HINT = (
     "pattern_types (list from structuring, smurfing, layering, rapid_cashout, velocity, "
     "dormant_reactivation), top_n (int, default 10), confidence (0-1 float). "
     "IMPORTANT: countries must be ISO-3166 alpha-2 codes (e.g. 'DE' not 'Germany', "
-    "'GB' not 'United Kingdom', 'US' not 'United States')."
+    "'GB' not 'United Kingdom', 'US' not 'United States'). "
+    "IMPORTANT: amount_min is a lower bound, amount_max is an upper bound — never set them to "
+    "the same value unless the query asks for an exact amount. 'under/below/less than $X' means "
+    "amount_max=X only (leave amount_min unset). 'over/above/more than/at least $X' means "
+    "amount_min=X only (leave amount_max unset). Only set both when the query names two distinct "
+    "bounds, e.g. 'between $X and $Y'."
 )
 
 
@@ -82,7 +87,7 @@ def parse_intent(raw_query: str, reference_date: date | None = None) -> QueryInt
     llm_result = complete_json(f'Classify this AML compliance query: "{raw_query}"', _SCHEMA_HINT)
     if llm_result is not None:
         try:
-            sanitized = _sanitize_llm_result(llm_result, reference_date)
+            sanitized = _sanitize_llm_result(llm_result, reference_date, raw_query)
             return QueryIntent(raw_query=raw_query, parsed_by="llm", **sanitized)
         except Exception:
             pass  # malformed LLM output -> fall through to the regex parser
@@ -157,7 +162,38 @@ def _normalise_country(value: str) -> str:
     return _COUNTRY_NAME_TO_ISO2.get(stripped.lower(), stripped.upper())
 
 
-def _sanitize_llm_result(llm_result: dict, reference_date: date) -> dict:
+_UNDER_WORDS = ("under $", "below $", "less than $")
+_OVER_WORDS = ("over $", "above $", "more than $", "at least $")
+
+
+def _fix_one_sided_amount_bound(filters: dict, raw_query: str) -> None:
+    """Some LLM providers (observed with weaker/local models) mishandle a
+    one-sided amount phrase like "under $10,000" in two ways: (a) collapsing
+    it into amount_min=amount_max=X, which then filters for transactions
+    equal to exactly X and empties the result, or (b) putting X in the wrong
+    bound entirely (amount_min instead of amount_max for "under"). Detect the
+    one-sided phrasing in the raw query text and correct the bound(s)
+    accordingly, mirroring the equivalent regex-fallback logic in
+    _parse_with_rules.
+    """
+    amount_min = filters.get("amount_min")
+    amount_max = filters.get("amount_max")
+    q = raw_query.lower()
+    is_under = any(w in q for w in _UNDER_WORDS)
+    is_over = any(w in q for w in _OVER_WORDS)
+    if is_under and not is_over:
+        if amount_min is not None and amount_max is None:
+            filters["amount_max"] = filters.pop("amount_min")
+        elif amount_min is not None and amount_max is not None and amount_min == amount_max:
+            filters.pop("amount_min", None)
+    elif is_over and not is_under:
+        if amount_max is not None and amount_min is None:
+            filters["amount_min"] = filters.pop("amount_max")
+        elif amount_min is not None and amount_max is not None and amount_min == amount_max:
+            filters.pop("amount_max", None)
+
+
+def _sanitize_llm_result(llm_result: dict, reference_date: date, raw_query: str = "") -> dict:
     result = dict(llm_result)
     # confidence/top_n are non-Optional QueryIntent fields — an explicit None
     # from the LLM must be dropped so the field default applies, not passed
@@ -181,6 +217,7 @@ def _sanitize_llm_result(llm_result: dict, reference_date: date) -> dict:
             filters["countries"] = [
                 _normalise_country(c) for c in filters["countries"]
             ]
+        _fix_one_sided_amount_bound(filters, raw_query)
         # customer_segment must be a plain string — smaller/weaker models
         # (observed with a local 3B Ollama model) sometimes wrap it in a list.
         seg = filters.get("customer_segment")
