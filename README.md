@@ -16,13 +16,14 @@ Built for a 48-hour hackathon, Problem Statement 1 (AI-Powered Suspicious Activi
 3. [Solution approach](#solution-approach)
 4. [Why this is agentic](#why-this-is-agentic)
 5. [Architecture](#architecture)
-6. [Tech stack](#tech-stack)
-7. [Datasets](#datasets)
-8. [Setup](#setup)
-9. [Usage — example queries](#usage--example-queries)
-10. [Results](#results)
-11. [Limitations](#limitations)
-12. [Team](#team)
+6. [Repo structure](#repo-structure)
+7. [Tech stack](#tech-stack)
+8. [Datasets](#datasets)
+9. [Setup](#setup)
+10. [Usage — example queries](#usage--example-queries)
+11. [Results](#results)
+12. [Limitations](#limitations)
+13. [Team](#team)
 
 ---
 
@@ -125,6 +126,51 @@ The frozen interface both halves of this project are built against: **[docs/CONT
 The two-person parallel build plan (for context on how this repo came together):
 **[WORKPLAN.md](WORKPLAN.md)**.
 
+## Repo structure
+
+```
+soc/
+├── backend/
+│   ├── main.py                 # FastAPI app — POST /query, GET /health
+│   ├── config.py                # env-driven settings (AML_USE_MOCKS, AML_DATASET_PATH, ...)
+│   ├── schemas.py                # FROZEN — Pydantic contract (QueryIntent, ExecutionPlan, AgentResponse, ...)
+│   ├── agent/
+│   │   ├── intent_parser.py     # NL query → QueryIntent (LLM primary, regex fallback)
+│   │   ├── planner.py           # QueryIntent → ExecutionPlan (query-specific tool sequence)
+│   │   ├── executor.py          # runs the plan, threads ToolContext, conditional re-planning
+│   │   ├── narrator.py          # explanation + escalation text per flag
+│   │   └── registry.py          # auto-discovers @tool-decorated functions
+│   ├── llm/
+│   │   └── client.py             # provider-agnostic adapter (Gemini/OpenAI/Groq/Ollama) + regex fallback
+│   └── tools/
+│       ├── base.py               # FROZEN — ToolContext, ToolResult, @tool decorator
+│       ├── data_loader.py        # Kaggle/synthetic CSV → canonical schema
+│       ├── filters.py, aggregate.py, entity.py, eda.py
+│       ├── features.py           # per-customer AML feature engineering
+│       ├── rules.py              # R1–R6 rule-based detectors
+│       ├── ml_detect.py           # IsolationForest + LocalOutlierFactor
+│       └── risk.py                # rule + ML score fusion → HIGH/MEDIUM/LOW/NONE
+├── frontend/
+│   ├── app.py                    # Streamlit entry point
+│   └── components/
+│       ├── plan_trace.py         # execution-plan trace panel
+│       ├── flag_cards.py         # flagged-entity cards + SAR draft
+│       ├── charts.py              # Plotly visualisations
+│       └── theme.py               # shared styling
+├── data/
+│   ├── sample/aml_sample.csv     # committed synthetic demo dataset (labelled ground truth)
+│   ├── generate_synthetic.py     # synthetic dataset generator (fixed seed)
+│   ├── build_ibm_cache.py        # optional: real IBM Kaggle dataset → canonical schema
+│   └── adapters/                  # per-source schema adapters
+├── tests/                          # pytest — planner, executor, rules, ML, no-label-leakage, API, ...
+├── docs/
+│   ├── CONTRACTS.md               # FROZEN — the interface Track A and Track B build against
+│   └── screenshots/                # images referenced from this README
+├── run_demo.py                     # starts backend + frontend, opens the browser
+├── requirements.txt / requirements-data.txt
+└── README.md, ARCHITECTURE.md, WORKPLAN.md, AML_LOGIC.md, DATA_CARD.md, ...
+```
+
 ## Tech stack
 
 | Layer | Choice |
@@ -141,11 +187,13 @@ The two-person parallel build plan (for context on how this repo came together):
 | Dataset | Role | Source | License / citation |
 |---|---|---|---|
 | **IBM Transactions for AML** (HI-Small) | Primary real-world base | [Kaggle: ealtman2019/ibm-transactions-for-anti-money-laundering-aml](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml) | Altman, Baeck, Gerlach — "Realistic Synthetic Financial Transactions for Anti-Money Laundering Models," NeurIPS 2023 Datasets and Benchmarks |
-| **Synthetic overlay** (`data/sample/aml_sample.csv`) | Committed demo dataset — guarantees structuring/smurfing/layering/rapid-cashout patterns are present and labelled, no Kaggle download required to run the demo | `data/generate_synthetic.py`, fixed seed (42) | Ours — full schema, field definitions, and generation logic documented in [DATA_CARD.md](DATA_CARD.md) |
+| **Synthetic overlay** (`data/sample/aml_sample.csv`) | Original committed demo dataset — guarantees structuring/smurfing/layering/rapid-cashout patterns are present and labelled, no Kaggle download required to run the demo | `data/generate_synthetic.py`, fixed seed (42) | Ours — full schema, field definitions, and generation logic documented in [DATA_CARD.md](DATA_CARD.md) |
+| **Alt-schema synthetic dataset** (`data/sample/aml_sample_alt.csv`, 1,710 transactions / 294 customers) | **Default dataset the live agent actually queries** (`load_data`'s `source` parameter defaults to `"synthetic_alt"` — see `backend/tools/data_loader.py`). Same laundering typologies as the original synthetic set, but generated with a deliberately different raw schema (renamed headers, coded enums, `ACC-`-prefixed account IDs, no `is_cross_border` column) to prove the canonical-schema adapter (`docs/CONTRACTS.md` Contract 0) generalises to a raw format it wasn't hand-fit to, rather than being hardcoded to one CSV's column names | `data/generate_synthetic_alt.py`, fixed seed | Ours |
 
-Both are adapted into one canonical schema (`docs/CONTRACTS.md` Contract 0) before any detection code
-touches them — the datasets are fully swappable. Full field-by-field preprocessing decisions, raw dataset
-statistics, and every assumption made by the synthetic generator: **[DATA_CARD.md](DATA_CARD.md)**.
+All three are adapted into one canonical schema (`docs/CONTRACTS.md` Contract 0) before any detection code
+touches them — the datasets are fully swappable via `load_data(source=...)` (`'ibm'`, `'ibm_stratified'`,
+`'synthetic'`, or `'synthetic_alt'`). Full field-by-field preprocessing decisions, raw dataset statistics,
+and every assumption made by each synthetic generator: **[DATA_CARD.md](DATA_CARD.md)**.
 
 ## Setup
 
@@ -225,11 +273,15 @@ by the ML anomaly score before reaching `HIGH`/SAR territory — see Contract 5'
 
 ### Quantitative validation
 
-Computed against the committed synthetic dataset's ground truth (`data/sample/aml_sample.csv`'s
+Computed against the original synthetic dataset's ground truth (`data/sample/aml_sample.csv`'s
 `label_is_laundering` field — 202 of 2,002 transactions, injected by the generator across the
 structuring/smurfing/rapid-cashout/layering cohorts; see [DATA_CARD.md](DATA_CARD.md)). Not validated
 against the raw IBM Kaggle dataset — that requires a Kaggle download not run in this environment; the
 synthetic set is the labelled ground truth actually available here.
+
+> **Note:** `load_data` now defaults to the alt-schema synthetic dataset (`source="synthetic_alt"`, see
+> [Datasets](#datasets)) for live queries. The precision/recall table below has not yet been re-run against
+> that dataset's ground truth — it reflects a validation pass against the original `aml_sample.csv` only.
 
 **Methodology**: our system flags *customers*, not individual transactions, so ground truth is aggregated
 to the customer level: a customer is a true positive if they are the **sender** of at least one labelled
